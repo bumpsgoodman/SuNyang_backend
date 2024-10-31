@@ -9,9 +9,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void AddSection(INI_PARSER* pParser, INI_SECTION* pSection);
+static void addSection(INI_PARSER* pParser, INI_SECTION* pSection);
+static void addKeyValue(INI_SECTION* pSection, INI_KEY_VALUE* pKeyValue);
 
-bool InitINIParser(INI_PARSER* pParser)
+static const INI_SECTION* findSectionOrNull(const INI_PARSER* pParser, const char* pSectionName);
+static const INI_KEY_VALUE* findKeyValueOrNull(const INI_SECTION* pSection, const char* pKey);
+
+bool INIParser_Init(INI_PARSER* pParser)
 {
     ASSERT(pParser != NULL, "pParser is NULL");
 
@@ -19,7 +23,32 @@ bool InitINIParser(INI_PARSER* pParser)
     return true;
 }
 
-bool ParseINI(INI_PARSER* pParser, const char* pFilename)
+void INIParser_Release(INI_PARSER* pParser)
+{
+    ASSERT(pParser != NULL, "pParser is NULL");
+
+    INI_SECTION* pSection = pParser->pSectionsListHead;
+    while (pSection != NULL)
+    {
+        INI_KEY_VALUE* pKeyValue = pSection->pKeyValuesListHead;
+        while (pKeyValue != NULL)
+        {
+            INI_KEY_VALUE* pDeletedKeyValue = pKeyValue;
+            pKeyValue = pKeyValue->pNext;
+
+            SAFE_FREE(pDeletedKeyValue);
+        }
+
+        INI_SECTION* pDeletedSection = pSection;
+        pSection = pSection->pNext;
+
+        SAFE_FREE(pDeletedSection);
+    }
+
+    memset(pParser, 0, sizeof(INI_PARSER));
+}
+
+bool INIParser_Parse(INI_PARSER* pParser, const char* pFilename)
 {
     ASSERT(pParser != NULL, "pParser is NULL");
     ASSERT(pFilename != NULL, "pFilename is NULL");
@@ -30,33 +59,29 @@ bool ParseINI(INI_PARSER* pParser, const char* pFilename)
         return false;
     }
 
-    bool bComment = false;
-    bool bInSection = false;
     char buffer[1024];
     INI_SECTION* pActiveSection = NULL;
-    INI_KEY_VALUE* pActiveKeyValue = NULL;
     while (fgets(buffer, 1024, pINIFile) != NULL)
     {
-        char* pStartSection = NULL;
-        char* pEndSection = NULL;
-        char* pStartKey = NULL;
-        char* pEndKey = NULL;
-        char* pStartValue = NULL;
-        char* pEndValue = NULL;
+        const char* pStartSection = NULL;
+        const char* pEndSection = NULL;
+        const char* pStartKey = NULL;
+        const char* pEndKey = NULL;
+        const char* pStartValue = NULL;
+        const char* pEndValue = NULL;
 
         const char* p = buffer;
         while (*p != '\0')
         {
             const char c = *p;
 
-            if (c == ';' || c == '#')
+            if (c == '\n' || c == ';' || c == '#')
             {
-                break;
-            }
-            else if (c == ' ' || c == '\t' || c == '\n')
-            {
-                p++;
-                continue;
+                if (pStartValue != NULL)
+                {
+                    pEndValue = p;
+                    break;
+                }
             }
             else if (c == '[')
             {
@@ -64,7 +89,7 @@ bool ParseINI(INI_PARSER* pParser, const char* pFilename)
             }
             else if (c == ']')
             {
-                pEndSection = p - 1;
+                pEndSection = p;
                 const size_t sectionLength = pEndSection - pStartSection;
 
                 // 섹션 이름 복사하기
@@ -74,42 +99,248 @@ bool ParseINI(INI_PARSER* pParser, const char* pFilename)
 
                 INI_SECTION* pSection = (INI_SECTION*)malloc(sizeof(INI_SECTION));
                 pSection->pName = pSectionName;
+                pSection->NameLength = sectionLength;
+                pSection->pKeyValuesListHead = NULL;
+                pSection->pKeyValuesListTail = NULL;
 
-                AddSection(pParser, pSection);
+                addSection(pParser, pSection);
 
                 pActiveSection = pSection;
-                pActiveKeyValue = (INI_KEY_VALUE*)malloc(sizeof(INI_KEY_VALUE));
                 break;
             }
             else if (c == '=' || c == ':')
             {
-                pEndKey = p - 1;
-                const size_t keyLength = pEndKey - pStartKey;
-
-                // 키 복사하기
-                char* pKey = (char*)malloc(keyLength + 1);
-                strncpy(pKey, pStartKey, keyLength);
-                pKey[keyLength] = '\0';
-
-                INI_KEY_VALUE* pKeyValue = (INI_KEY_VALUE*)malloc(sizeof(INI_KEY_VALUE));
-                pKeyValue->pKey = pKey;
+                pEndKey = p;
+                
             }
             else
             {
-                if (pActiveSection != NULL)
+                // 섹션 내에 있는 키 찾기 위함
+                if (pStartKey == NULL && pActiveSection != NULL)
                 {
                     pStartKey = p;
+                }
+
+                // 키와 대칭되는 값 찾기 위함
+                if (pStartValue == NULL && pEndKey != NULL)
+                {
+                    pStartValue = p;
                 }
             }
 
             p++;
+        }
+
+        if (pStartValue != NULL && pEndValue == NULL)
+        {
+            pEndValue = p;
+        }
+
+        if (pEndValue != NULL)
+        {
+            // 키 후처리, 공백 제거
+            {
+                while (*pStartKey == ' ' || *pStartKey == '\t')
+                {
+                    pStartKey++;
+                }
+
+                while (*(pEndKey - 1) == ' ' || *(pEndKey - 1) == '\t')
+                {
+                    pEndKey--;
+                }
+            }
+
+            // 값 후처리, 공백 및 따옴표 제거
+            {
+                while (*pStartValue == ' ' || *pStartValue == '\t'
+                    || *pStartValue == '\'' || *pStartValue == '\"')
+                {
+                    pStartValue++;
+                }
+
+                while (*(pEndValue - 1) == ' ' || *(pEndValue - 1) == '\t'
+                    || *(pEndValue - 1) == '\'' || *(pEndValue - 1) == '\"')
+                {
+                    pEndValue--;
+                }
+            }
+
+            const size_t keyLength = pEndKey - pStartKey;
+            const size_t valueLength = pEndValue - pStartValue;
+
+            // 키 복사하기
+            char* pKey = (char*)malloc(keyLength + 1);
+            strncpy(pKey, pStartKey, keyLength);
+            pKey[keyLength] = '\0';
+
+            // 값 복사하기
+            char* pValue = (char*)malloc(valueLength + 1);
+            strncpy(pValue, pStartValue, valueLength);
+            pValue[valueLength] = '\0';
+
+            // 키-값 만들기
+            INI_KEY_VALUE* pKeyValue = (INI_KEY_VALUE*)malloc(sizeof(INI_KEY_VALUE));
+            pKeyValue->pKey = pKey;
+            pKeyValue->pValue = pValue;
+            pKeyValue->KeyLength = keyLength;
+            pKeyValue->ValueLength = valueLength;
+
+            addKeyValue(pActiveSection, pKeyValue);
         }
     }
 
     return true;
 }
 
-static void AddSection(INI_PARSER* pParser, INI_SECTION* pSection)
+bool INIParser_GetValueChar(const INI_PARSER* pParser, const char* pSectionName, const char* pKey, char* pOutValue)
+{
+    ASSERT(pParser != NULL, "pParser is NULL");
+    ASSERT(pSectionName != NULL, "pSectionName is NULL");
+    ASSERT(pKey != NULL, "pKey is NULL");
+    ASSERT(pOutValue != NULL, "pOutValue is NULL");
+
+    const INI_SECTION* pSection = findSectionOrNull(pParser, pSectionName);
+    if (pSection == NULL)
+    {
+        return false;
+    }
+
+    const INI_KEY_VALUE* pKeyValue = findKeyValueOrNull(pSection, pKey);
+    if (pKeyValue == NULL)
+    {
+        return false;
+    }
+
+    *pOutValue = *(char*)pKeyValue->pValue;
+
+    return true;
+}
+
+bool INIParser_GetValueString(const INI_PARSER* pParser, const char* pSectionName, const char* pKey, char** ppOutValue)
+{
+    ASSERT(pParser != NULL, "pParser is NULL");
+    ASSERT(pSectionName != NULL, "pSectionName is NULL");
+    ASSERT(pKey != NULL, "pKey is NULL");
+    ASSERT(ppOutValue != NULL, "ppOutValue is NULL");
+
+    const INI_SECTION* pSection = findSectionOrNull(pParser, pSectionName);
+    if (pSection == NULL)
+    {
+        return false;
+    }
+
+    const INI_KEY_VALUE* pKeyValue = findKeyValueOrNull(pSection, pKey);
+    if (pKeyValue == NULL)
+    {
+        return false;
+    }
+
+    char* pValue = (char*)malloc(pKeyValue->ValueLength + 1);
+    strcpy(pValue, pKeyValue->pValue);
+
+    *ppOutValue = pValue;
+
+    return true;
+}
+
+bool INIParser_GetValueShort(const INI_PARSER* pParser, const char* pSectionName, const char* pKey, short* pOutValue)
+{
+    ASSERT(pParser != NULL, "pParser is NULL");
+    ASSERT(pSectionName != NULL, "pSectionName is NULL");
+    ASSERT(pKey != NULL, "pKey is NULL");
+    ASSERT(pOutValue != NULL, "pOutValue is NULL");
+
+    const INI_SECTION* pSection = findSectionOrNull(pParser, pSectionName);
+    if (pSection == NULL)
+    {
+        return false;
+    }
+
+    const INI_KEY_VALUE* pKeyValue = findKeyValueOrNull(pSection, pKey);
+    if (pKeyValue == NULL)
+    {
+        return false;
+    }
+
+    *pOutValue = (short)atoi(pKeyValue->pValue);
+
+    return true;
+}
+
+bool INIParser_GetValueInt(const INI_PARSER* pParser, const char* pSectionName, const char* pKey, int* pOutValue)
+{
+    ASSERT(pParser != NULL, "pParser is NULL");
+    ASSERT(pSectionName != NULL, "pSectionName is NULL");
+    ASSERT(pKey != NULL, "pKey is NULL");
+    ASSERT(pOutValue != NULL, "pOutValue is NULL");
+
+    const INI_SECTION* pSection = findSectionOrNull(pParser, pSectionName);
+    if (pSection == NULL)
+    {
+        return false;
+    }
+
+    const INI_KEY_VALUE* pKeyValue = findKeyValueOrNull(pSection, pKey);
+    if (pKeyValue == NULL)
+    {
+        return false;
+    }
+
+    *pOutValue = atoi(pKeyValue->pValue);
+
+    return true;
+}
+
+bool INIParser_GetValueFloat(const INI_PARSER* pParser, const char* pSectionName, const char* pKey, float* pOutValue)
+{
+    ASSERT(pParser != NULL, "pParser is NULL");
+    ASSERT(pSectionName != NULL, "pSectionName is NULL");
+    ASSERT(pKey != NULL, "pKey is NULL");
+    ASSERT(pOutValue != NULL, "pOutValue is NULL");
+
+    const INI_SECTION* pSection = findSectionOrNull(pParser, pSectionName);
+    if (pSection == NULL)
+    {
+        return false;
+    }
+
+    const INI_KEY_VALUE* pKeyValue = findKeyValueOrNull(pSection, pKey);
+    if (pKeyValue == NULL)
+    {
+        return false;
+    }
+
+    *pOutValue = (float)atof(pKeyValue->pValue);
+
+    return true;
+}
+
+bool INIParser_GetValueDouble(const INI_PARSER* pParser, const char* pSectionName, const char* pKey, double* pOutValue)
+{
+    ASSERT(pParser != NULL, "pParser is NULL");
+    ASSERT(pSectionName != NULL, "pSectionName is NULL");
+    ASSERT(pKey != NULL, "pKey is NULL");
+    ASSERT(pOutValue != NULL, "pOutValue is NULL");
+
+    const INI_SECTION* pSection = findSectionOrNull(pParser, pSectionName);
+    if (pSection == NULL)
+    {
+        return false;
+    }
+
+    const INI_KEY_VALUE* pKeyValue = findKeyValueOrNull(pSection, pKey);
+    if (pKeyValue == NULL)
+    {
+        return false;
+    }
+
+    *pOutValue = atof(pKeyValue->pValue);
+
+    return true;
+}
+
+static void addSection(INI_PARSER* pParser, INI_SECTION* pSection)
 {
     ASSERT(pParser != NULL, "pParser is NULL");
     ASSERT(pSection != NULL, "pSection is NULL");
@@ -125,4 +356,60 @@ static void AddSection(INI_PARSER* pParser, INI_SECTION* pSection)
         pSection->pPrev = pParser->pSectionsListTail;
         pParser->pSectionsListTail = pSection;
     }
+}
+
+static void addKeyValue(INI_SECTION* pSection, INI_KEY_VALUE* pKeyValue)
+{
+    ASSERT(pSection != NULL, "pSection is NULL");
+    ASSERT(pKeyValue != NULL, "pKeyValue is NULL");
+
+    if (pSection->pKeyValuesListTail == NULL)
+    {
+        pSection->pKeyValuesListTail = pSection->pKeyValuesListHead = pKeyValue;
+        pKeyValue->pNext = pKeyValue->pPrev = NULL;
+    }
+    else
+    {
+        pSection->pKeyValuesListTail->pNext = pKeyValue;
+        pKeyValue->pPrev = pSection->pKeyValuesListTail;
+        pSection->pKeyValuesListTail = pKeyValue;
+    }
+}
+
+static const INI_SECTION* findSectionOrNull(const INI_PARSER* pParser, const char* pSectionName)
+{
+    ASSERT(pParser != NULL, "pParser is NULL");
+    ASSERT(pSectionName != NULL, "pSectionName is NULL");
+
+    const INI_SECTION* pSection = pParser->pSectionsListHead;
+    while (pSection != NULL)
+    {
+        if (strcmp(pSection->pName, pSectionName) == 0)
+        {
+            return pSection;
+        }
+
+        pSection = pSection->pNext;
+    }
+
+    return NULL;
+}
+
+static const INI_KEY_VALUE* findKeyValueOrNull(const const INI_SECTION* pSection, const char* pKey)
+{
+    ASSERT(pSection != NULL, "pSection is NULL");
+    ASSERT(pKey != NULL, "pKey is NULL");
+
+    const INI_KEY_VALUE* pKeyValue = pSection->pKeyValuesListHead;
+    while (pKeyValue != NULL)
+    {
+        if (strcmp(pKeyValue->pKey, pKey) == 0)
+        {
+            return pKeyValue;
+        }
+
+        pKeyValue = pKeyValue->pNext;
+    }
+
+    return NULL;
 }
