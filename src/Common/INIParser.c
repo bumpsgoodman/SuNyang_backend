@@ -36,12 +36,15 @@ void INIParser_Release(INI_PARSER* pParser)
             INI_KEY_VALUE* pDeletedKeyValue = pKeyValue;
             pKeyValue = pKeyValue->pNext;
 
+            SAFE_FREE(pDeletedKeyValue->pKey);
+            SAFE_FREE(pDeletedKeyValue->pValue);
             SAFE_FREE(pDeletedKeyValue);
         }
 
         INI_SECTION* pDeletedSection = pSection;
         pSection = pSection->pNext;
 
+        SAFE_FREE(pDeletedSection->pName);
         SAFE_FREE(pDeletedSection);
     }
 
@@ -189,6 +192,8 @@ bool INIParser_Parse(INI_PARSER* pParser, const char* pFilename)
             addKeyValue(pActiveSection, pKeyValue);
         }
     }
+
+    fclose(pINIFile);
 
     return true;
 }
@@ -354,6 +359,7 @@ static void addSection(INI_PARSER* pParser, INI_SECTION* pSection)
     {
         pParser->pSectionsListTail->pNext = pSection;
         pSection->pPrev = pParser->pSectionsListTail;
+        pSection->pNext = NULL;
         pParser->pSectionsListTail = pSection;
     }
 }
@@ -372,6 +378,7 @@ static void addKeyValue(INI_SECTION* pSection, INI_KEY_VALUE* pKeyValue)
     {
         pSection->pKeyValuesListTail->pNext = pKeyValue;
         pKeyValue->pPrev = pSection->pKeyValuesListTail;
+        pKeyValue->pNext = NULL;
         pSection->pKeyValuesListTail = pKeyValue;
     }
 }
@@ -395,7 +402,7 @@ static const INI_SECTION* findSectionOrNull(const INI_PARSER* pParser, const cha
     return NULL;
 }
 
-static const INI_KEY_VALUE* findKeyValueOrNull(const const INI_SECTION* pSection, const char* pKey)
+static const INI_KEY_VALUE* findKeyValueOrNull(const INI_SECTION* pSection, const char* pKey)
 {
     ASSERT(pSection != NULL, "pSection is NULL");
     ASSERT(pKey != NULL, "pKey is NULL");
