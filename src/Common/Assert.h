@@ -3,6 +3,6 @@
 #ifndef __ASSERT_H
 #define __ASSERT_H
 
-#define ASSERT(cond, msg) { if (!(cond)) { __asm("int 3"); }}
+#define ASSERT(cond, msg) { if (!(cond)) { __asm__("int $3"); }}
 
 #endif // __ASSERT_H
