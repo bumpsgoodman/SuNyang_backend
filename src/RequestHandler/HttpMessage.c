@@ -6,6 +6,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+const char* GetMethodString(const HTTP_METHOD method)
+{
+    static const char* METHODS[] = { "GET", "HEAD", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH" };
+    return METHODS[method];
+}
+
 bool ParseStartLine(char* pHttpMessage, START_LINE* pOutStartLine)
 {
     ASSERT(pHttpMessage != NULL, "pHttpMessage is NULL");

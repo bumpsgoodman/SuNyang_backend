@@ -106,6 +106,8 @@ typedef struct STATUS_LINE
     HTTP_STATUS Status;
 } STATUS_LINE;
 
+const char* GetMethodString(const HTTP_METHOD method);
+
 bool ParseStartLine(char* pHttpMessage, START_LINE* pOutStartLine);
 
 #endif // __HTTP_MESSAGE_H
