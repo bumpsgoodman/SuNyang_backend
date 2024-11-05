@@ -1,16 +1,21 @@
 // 작성자: bumpsgoodman
 
 #include "RequestHandler/HttpMessage.h"
+#include "RequestHandler/HttpRedirector.h"
 #include "Common/Assert.h"
 #include "Common/ErrorHandler.h"
 #include "Common/INIParser.h"
 #include "Common/PrimitiveType.h"
+#include "Common/SafeDelete.h"
+
+#include "Logger/Logger.h"
 
 #include <ctype.h>
-#include <unistd.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
@@ -18,6 +23,7 @@
 #include <openssl/err.h>
 
 #define MAX_HTTP_MESSAGE_SIZE 8192
+#define IPV4_SIZE 16
 
 typedef struct SERVER_INFO
 {
@@ -38,11 +44,15 @@ bool CreateSslAndAccept(SSL_CTX* pCTX, const int sock, SSL** ppOutSSL);
 
 void ResponseCorsHeaders(SSL* pSSL);
 
+void Ipv4ToString(const uint32_t ipv4, char* pOutBytes);
+
 int main(int argc, char* argv[])
-{
+{   
+    Logger_Print(LOG_LEVEL_INFO, "START SUNYANGI SERVER.");
+
     if (argc < 2)
     {
-        fprintf(stderr, "Error: Unable to read server information file.\n");
+        Logger_Print(LOG_LEVEL_ERROR, "Unable to read server information file.");
         goto lb_return;
     }
 
@@ -50,35 +60,44 @@ int main(int argc, char* argv[])
     SERVER_INFO serverInfo;
     if (!InitServerInfo(argv[1], &serverInfo))
     {
+        Logger_Print(LOG_LEVEL_ERROR, "Unable to read server information .ini file.");
         goto lb_return;
     }
+
+    pthread_t httpRedirectorThread;
+    pthread_create(&httpRedirectorThread, NULL, RedirectHttp, (void*)&serverInfo.HttpPort);
 
     // SSL 초기화
     SSL_CTX* pCTX;
     if (!InitSSL(serverInfo.pCertFilePath, serverInfo.pPrivateKeyFilePath, &pCTX))
     {
+        Logger_Print(LOG_LEVEL_ERROR, "Failed to initialize SSL");
         goto lb_return;
     }
-    
-    // 소켓 생성 및 바인딩
-    int httpSock;
-    int httpsSock;
-    CreateSocket(serverInfo.HttpPort, &httpSock);
-    CreateSocket(serverInfo.HttpsPort, &httpsSock);
 
-    // http 소켓 바인딩
-    if (!BindSocket(httpSock, serverInfo.HttpPort))
+    Logger_Print(LOG_LEVEL_INFO, "HTTPS - START");
+
+    // https 소켓 생성
+    int httpsSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (httpsSock < 0)
     {
+        Logger_Print(LOG_LEVEL_ERROR, "Failed to create HTTPS socket");
+    }
+
+    int opt = 1;
+    if (setsockopt(httpsSock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) 
+    {
+        Logger_Print(LOG_LEVEL_ERROR, "HTTPS - Failed to set socket options");
         goto lb_return;
     }
 
     // https 소켓 바인딩
     if (!BindSocket(httpsSock, serverInfo.HttpsPort))
     {
+        Logger_Print(LOG_LEVEL_ERROR, "Failed to bind HTTPS socket.");
         goto lb_return;
     }
-
-    listen(httpSock, 5);
+    
     listen(httpsSock, 5);
 
     // 클라이언트 소켓 생성
@@ -91,13 +110,14 @@ int main(int argc, char* argv[])
         clientSock = accept(httpsSock, (struct sockaddr*)&clientAddr, &clientLen);
         if (clientSock < 0)
         {
-            fprintf(stderr, "Error: Failed to create accept socket.\n");
-            goto lb_return;
+            Logger_Print(LOG_LEVEL_ERROR, "Failed to create client socket.");
+            goto lb_release_request;
         }
 
         if (!CreateSslAndAccept(pCTX, clientSock, &pSSL))
         {
-            goto lb_return;
+            Logger_Print(LOG_LEVEL_ERROR, "Failed to create SSL.");
+            goto lb_release_request;
         }
 
         char* pBuffer = (char*)malloc(MAX_HTTP_MESSAGE_SIZE);
@@ -105,19 +125,25 @@ int main(int argc, char* argv[])
         int n = SSL_read(pSSL, pBuffer, MAX_HTTP_MESSAGE_SIZE - 1);
         if (n < 0)
         {
-            fprintf(stderr, "Error: Failed to read from socket\n");
-            goto lb_return;
+            goto lb_release_request;
         }
-
-        printf("------------------\n");
-        printf("%s\n", pBuffer);
-        printf("------------------\n");
 
         START_LINE startLine;
         if (!ParseStartLine(pBuffer, &startLine))
         {
-            goto lb_return;
+            Logger_Print(LOG_LEVEL_ERROR, "Failed to parse start line.");
+            goto lb_release_request;
         }
+
+        char clientIP[INET_ADDRSTRLEN];
+        Ipv4ToString(clientAddr.sin_addr.s_addr, clientIP);
+        int clientPort = clientAddr.sin_port;
+
+        Logger_Print(LOG_LEVEL_INFO, "%s  %s  HTTP/%d.%d  from %s:%d", GetHttpMethodString(startLine.Method),
+                                                    startLine.pRequestTarget,
+                                                    startLine.Version.Major,
+                                                    startLine.Version.Minor,
+                                                    clientIP, clientPort);
 
         switch (startLine.Method)
         {
@@ -131,7 +157,7 @@ int main(int argc, char* argv[])
                 FILE* pImageFile = fopen(filename, "rb");
                 if (pImageFile == NULL)
                 {
-                    goto lb_return;
+                    goto lb_release_request;
                 }
 
                 // 파일 사이즈 구하기
@@ -144,6 +170,7 @@ int main(int argc, char* argv[])
                                 "Content-Type: image/png\r\n"
                                 "Content-Length: %d\r\n"
                                 "\r\n", imageSize);
+                Logger_Print(LOG_LEVEL_INFO, header);
                 SSL_write(pSSL, header, strlen(header));
 
                 char buffer[4096];
@@ -160,7 +187,7 @@ int main(int argc, char* argv[])
                 FILE* pFile = fopen("public/index.html", "rb");
                 if (pFile == NULL)
                 {
-                    goto lb_return;
+                    goto lb_release_request;
                 }
 
                 // 파일 사이즈 구하기
@@ -194,11 +221,19 @@ int main(int argc, char* argv[])
             break;
         }
 
-        free(pBuffer);
+    lb_release_request:
+        SAFE_FREE(pBuffer);
 
-        SSL_shutdown(pSSL);
-        SSL_free(pSSL);
-        close(clientSock);
+        if (pSSL != NULL)
+        {
+            SSL_shutdown(pSSL);
+            SSL_free(pSSL);
+        }
+
+        if (clientSock >= 0)
+        {
+            close(clientSock);
+        }
     }
 
 lb_return:
@@ -207,10 +242,7 @@ lb_return:
         close(clientSock);
     }
 
-    if (httpSock >= 0)
-    {
-        close(httpSock);
-    }
+    
 
     if (httpsSock >= 0)
     {
@@ -230,6 +262,8 @@ lb_return:
 
     free(serverInfo.pCertFilePath);
     free(serverInfo.pPrivateKeyFilePath);
+
+    Logger_Print(LOG_LEVEL_INFO, "End server");
 
     return 0;
 }
@@ -271,12 +305,11 @@ bool InitServerInfo(const char* pFilename, SERVER_INFO* pOutInfo)
     // .ini 파일인지 검사
     const size_t length = strlen(pFilename);
     if (length < 4
-        || pFilename[length - 1] != 'i'
-        || pFilename[length - 2] != 'n'
-        || pFilename[length - 3] != 'i'
+        || pFilename[length - 1] != 'i' && pFilename[length - 1] != 'I'
+        || pFilename[length - 2] != 'n' && pFilename[length - 2] != 'N'
+        || pFilename[length - 3] != 'i' && pFilename[length - 3] != 'I'
         || pFilename[length - 4] != '.')
     {
-        fprintf(stderr, "Error: Unable to read server information file.\n");
         return false;
     }
 
@@ -294,22 +327,6 @@ bool InitServerInfo(const char* pFilename, SERVER_INFO* pOutInfo)
     return true;
 }
 
-bool CreateSocket(const uint16_t port, int* pOutSocket)
-{
-    ASSERT(pOutSocket != NULL, "pOutSocket is NULL");
-
-    // 소켓 생성
-    const int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (sockfd < 0)
-    {
-        fprintf(stderr, "Error: Failed to create socket.\n");
-        return false;
-    }
-
-    *pOutSocket = sockfd;
-    return true;
-}
-
 bool BindSocket(const int sock, const uint16_t port)
 {
     ASSERT(sock >= 0, "Invalid soket.");
@@ -321,7 +338,6 @@ bool BindSocket(const int sock, const uint16_t port)
     serverAddr.sin_port = htons(port);
     if (bind(sock, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0)
     {
-        fprintf(stderr, "Error: Failed to bind socket.\n");
         return false;
     }
 
@@ -366,4 +382,16 @@ void ResponseCorsHeaders(SSL* pSSL)
         "Access-Control-Allow-Headers: Content-Type\r\n"
         "\r\n";
     SSL_write(pSSL, headers, strlen(headers));
+}
+
+void Ipv4ToString(const uint32_t ipv4, char* pOutBytes)
+{
+    ASSERT(pOutBytes != NULL, "pOutBytes is NULL");
+
+    const uint8_t a = ipv4 & 0xff;
+    const uint8_t b = (ipv4 & 0xff00) >> 8;
+    const uint8_t c = (ipv4 & 0xff0000) >> 16;
+    const uint8_t d = (ipv4 & 0xff000000) >> 24;
+
+    sprintf(pOutBytes, "%d.%d.%d.%d", a, b, c, d);
 }
