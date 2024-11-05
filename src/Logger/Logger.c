@@ -43,13 +43,13 @@ void Logger_Print(const LOG_LEVEL level, const char* pFormat, ...)
         break;
     }
 
+    CONSOLE_VT_SET_DEFAULT_COLOR();
+
     va_list args;
     va_start(args, pFormat);
     vprintf(pFormat, args);
     printf("\n");
     va_end(args);
-
-    CONSOLE_VT_SET_DEFAULT_COLOR();
 }
 
 void Logger_PrintFile(const LOG_LEVEL level, const char* pFilename, const char* pFormat, ...)
