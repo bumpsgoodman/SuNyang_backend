@@ -1,8 +1,8 @@
 // 작성자: bumpsgoodman
 
 #include "INIParser.h"
-#include "Assert.h"
-#include "SafeDelete.h"
+#include "../Assert.h"
+#include "../SafeDelete.h"
 
 #include <assert.h>
 #include <stdio.h>
