@@ -19,6 +19,8 @@ static const char* sp_HttpRedirectorInfoDetailTable[] =
     "Failed to bind socket.",
     "Failed to listen socket.",
     "Failed to create epoll.",
+    "Failed to watch epoll descriptor.",
+    "Buffer overflow.",
 };
 
 static const char** sp_detailTables[] =

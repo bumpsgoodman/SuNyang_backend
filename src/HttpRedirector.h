@@ -15,6 +15,5 @@ typedef struct HTTP_REDIRECTOR
 
 bool HttpRedirector_Init(HTTP_REDIRECTOR* pHttpRedirector, uint16_t port);
 void HttpRedirector_Start(HTTP_REDIRECTOR* pHttpRedirector);
-void HttpRedirector_Shutdown(HTTP_REDIRECTOR* pHttpRedirector);
 
 #endif // __HTTP_REDIRECTOR_H

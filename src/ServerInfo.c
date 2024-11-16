@@ -16,7 +16,7 @@ bool ServerInfo_Init(SERVER_INFO* pOutServerInfo, const char* pFilename)
     ASSERT(pOutServerInfo != NULL, "pOutServerInfo is NULL");
     ASSERT(pFilename != NULL, "pFilename is NULL");
 
-    Logger_Print(LOG_LEVEL_INFO, "ServerInfo - Start reading the server infor file.");
+    Logger_Print(LOG_LEVEL_INFO, "[ServerInfo] Start reading the server infor file.");
 
     bool bResult = false;
 
@@ -30,7 +30,7 @@ bool ServerInfo_Init(SERVER_INFO* pOutServerInfo, const char* pFilename)
     INI_PARSER parser;
     if (!INIParser_Init(&parser))
     {
-        ErrorCode_SetLastError(ERROR_CODE_SERVER_INFO_FAILED_INIT_INI_PARSER);\
+        ErrorCode_SetLastError(ERROR_CODE_SERVER_INFO_FAILED_INIT_INI_PARSER);
         goto lb_return;
     }
 
@@ -52,7 +52,7 @@ bool ServerInfo_Init(SERVER_INFO* pOutServerInfo, const char* pFilename)
         goto lb_release;
     }
 
-    Logger_Print(LOG_LEVEL_INFO, "ServerInfo - End reading the server infor file with a success.\n"
+    Logger_Print(LOG_LEVEL_INFO, "[ServerInfo] End reading the server infor file with a success.\n"
                                  "[Server]\n"
                                  "HTTP port: %d\n"
                                  "HTTPS port: %d", pOutServerInfo->HttpPort, pOutServerInfo->HttpsPort);
@@ -65,7 +65,7 @@ lb_release:
 lb_return:
     if (!bResult)
     {
-        Logger_Print(LOG_LEVEL_ERROR, "ServerInfo - End reading the server info file with an error.\n"
+        Logger_Print(LOG_LEVEL_ERROR, "[ServerInfo] End reading the server info file with an error.\n"
                                       "Detail: %s", ErrorCode_GetLastErrorDetail());
     }
 

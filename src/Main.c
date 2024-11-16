@@ -50,13 +50,12 @@ int main(int argc, char* argv[])
         HttpRedirector_Start(&httpRedirector);
     }
 
-    while (true) ;
+    pthread_join(httpRedirector.Thread, NULL);
 
 lb_return:
     // 해제
     {
         ServerInfo_Release(&serverInfo);
-        HttpRedirector_Shutdown(&httpRedirector);
     }
 
     Logger_Print(LOG_LEVEL_INFO, "END SUNYANGI SERVER.");
