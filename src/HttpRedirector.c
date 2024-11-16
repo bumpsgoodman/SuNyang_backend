@@ -165,10 +165,17 @@ static void* redirectHttp(void* pPort)
                 if (bytesRead > 0)
                 {
                     buffer[bytesRead] = '\0';
+                    const char* pMethod = strtok(buffer, " ");
+                    const char* pLocation = strtok(NULL, " ");
+
+                    char response[256];
+
+
                     const char* pResponse = "HTTP/1.1 200 OK\r\n"
                     "Content-Type: text/plain\r\n"
-                    "Content-Length: 12\r\n"
-                    "\r\n" "Hello world";
+                    "Content-Length: 11\r\n"
+                    "\r\n"
+                    "Hello world\r\n";
                     write(events[i].data.fd, pResponse, strlen(pResponse));
                 }
 
