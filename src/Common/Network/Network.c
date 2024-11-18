@@ -1,6 +1,7 @@
 #include "Network.h"
 #include "../Assert.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 
 void Network_Ipv4ToString(const uint32_t ipv4, const BYTE_ORDERING ordering, char* pOutIpv4, const BYTE_ORDERING outOrdering)

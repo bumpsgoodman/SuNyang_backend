@@ -5,11 +5,14 @@
 #include "Common/ErrorCode/ErrorCode.h"
 #include "Common/PrimitiveType.h"
 #include "Common/SafeDelete.h"
+#include "Common/MemPool/StaticMemPool.h"
 #include "Common/Logger/Logger.h"
+#include "Common/Network/Network.h"
 
 #include <errno.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <netinet/in.h>
@@ -19,38 +22,38 @@
 #define MAX_HTTP_MESSAGE_SIZE 8192
 #define MAX_EPOLL_EVENTS 128
 
-static void* redirectHttp(void* pPort);
-
-bool HttpRedirector_Init(HTTP_REDIRECTOR* pHttpRedirector, uint16_t port)
+typedef struct CLIENT
 {
-    ASSERT(pHttpRedirector != NULL, "pHttpRedirector is NULL");
+    int Sock;
+    struct sockaddr_in Addr;
+} CLIENT;
 
-    pHttpRedirector->Port = port;
-    return true;
-}
+static void* redirectHttp(void* pArg);
 
-void HttpRedirector_Start(HTTP_REDIRECTOR* pHttpRedirector)
+pthread_t HttpRedirector_Start(const uint16_t httpPort)
 {
-    ASSERT(pHttpRedirector != NULL, "pHttpRedirector is NULL");
-
     Logger_Print(LOG_LEVEL_INFO, "[HttpRedirector] Start HTTP redirector.");
 
-    if (pthread_create(&pHttpRedirector->Thread, NULL, redirectHttp, (void*)&pHttpRedirector->Port) < 0)
+    pthread_t httpRedirector;
+    if (pthread_create(&httpRedirector, NULL, redirectHttp, (void*)&httpPort) < 0)
     {
         ErrorCode_SetLastError(ERROR_CODE_REDIRECTOR_FAILED_CREATE_THREAD);
         Logger_Print(LOG_LEVEL_ERROR, "[HttpRedirector] Shutdown HTTP redirector with an error.\n"
                                       "Detail: %s\n"
                                       "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
-        goto lb_return;
+        return 0;
     }
 
 lb_return:
-    return;
+    return httpRedirector;
 }
 
-static void* redirectHttp(void* pPort)
+static void* redirectHttp(void* pArg)
 {
-    const uint16_t httpPort = *(uint16_t*)pPort;
+    const uint16_t httpPort = *(uint16_t*)pArg;
+    STATIC_MEM_POOL clientPool;
+
+    StaticMemPool_Init(&clientPool, 10, 1000, sizeof(CLIENT));
 
     // HTTP 소켓 생성
     const int httpSock = socket(AF_INET, SOCK_STREAM, 0);
@@ -98,7 +101,7 @@ static void* redirectHttp(void* pPort)
     }
 
     // HTTP epoll 등록
-    struct epoll_event event;
+    struct epoll_event event = { 0, };
     event.events = EPOLLIN | EPOLLOUT | EPOLLERR;
     event.data.fd = httpSock;
     if (epoll_ctl(httpEpoll, EPOLL_CTL_ADD, httpSock, &event) == -1)
@@ -118,9 +121,10 @@ static void* redirectHttp(void* pPort)
         {
             if (events[i].data.fd == httpSock)
             {
-                struct sockaddr_in clientAddr;
-                socklen_t clientAddrLen = sizeof(clientAddr);
-                const int clientSock = accept(httpSock, (struct sockaddr*)&clientAddr, &clientAddrLen);
+                CLIENT* pClient = (CLIENT*)StaticMemPool_Alloc(&clientPool);
+
+                socklen_t clientAddrLen = sizeof(struct sockaddr_in);
+                const int clientSock = accept(httpSock, (struct sockaddr*)&pClient->Addr, &clientAddrLen);
                 if (clientSock < 0)
                 {
                     ErrorCode_SetLastError(ERROR_CODE_REDIRECTOR_FAILED_CREATE_SOCKET);
@@ -130,10 +134,12 @@ static void* redirectHttp(void* pPort)
                     continue;
                 }
 
+                pClient->Sock = clientSock;
+
                 // client socket epoll 등록
                 struct epoll_event event;
                 event.events = EPOLLIN | EPOLLOUT | EPOLLERR;
-                event.data.fd = clientSock;
+                event.data.ptr = pClient;
                 if (epoll_ctl(httpEpoll, EPOLL_CTL_ADD, clientSock, &event) == -1)
                 {
                     ErrorCode_SetLastError(ERROR_CODE_REDIRECTOR_FAILED_WATCH_EPOLL_DESCRIPTER);
@@ -146,8 +152,10 @@ static void* redirectHttp(void* pPort)
             }
             else
             {
+                CLIENT* pClient = (CLIENT*)events[i].data.ptr;
+
                 char buffer[MAX_HTTP_MESSAGE_SIZE];
-                ssize_t bytesRead = read(events[i].data.fd, buffer, MAX_HTTP_MESSAGE_SIZE - 1);
+                ssize_t bytesRead = read(pClient->Sock, buffer, MAX_HTTP_MESSAGE_SIZE - 1);
                 printf("\n@@@@@@@@@@@@@@@@\n");
                 printf("%s\n", buffer);
                 printf("@@@@@@@@@@@@@@@@\n");
@@ -157,7 +165,7 @@ static void* redirectHttp(void* pPort)
                     Logger_Print(LOG_LEVEL_WARNING, "[HttpRedirector] Buffer overflow.\n"
                                                     "Detail: %s", ErrorCode_GetLastErrorDetail());
 
-                    while ((bytesRead = read(events[i].data.fd, buffer, MAX_HTTP_MESSAGE_SIZE - 1)) > 0);
+                    while ((bytesRead = read(pClient->Sock, buffer, MAX_HTTP_MESSAGE_SIZE - 1)) > 0);
 
                     continue;
                 }
@@ -167,19 +175,28 @@ static void* redirectHttp(void* pPort)
                     buffer[bytesRead] = '\0';
                     const char* pMethod = strtok(buffer, " ");
                     const char* pLocation = strtok(NULL, " ");
+                    const char* pVersion = strtok(NULL, " \r\n");
 
-                    char response[256];
+                    char ipv4[IPV4_LENGTH];
+                    const struct sockaddr_in* pAddr = &pClient->Addr;
+                    Network_Ipv4ToString(pAddr->sin_addr.s_addr, BYTE_ORDERING_LITTLE_ENDIAN, ipv4, BYTE_ORDERING_BIG_ENDIAN);
+                    Logger_Print(LOG_LEVEL_INFO, "[HttpRedirector] Request - %s %s %s, %s:%d", pMethod, pLocation, pVersion, ipv4, pAddr->sin_port);
 
-
-                    const char* pResponse = "HTTP/1.1 200 OK\r\n"
-                    "Content-Type: text/plain\r\n"
-                    "Content-Length: 11\r\n"
-                    "\r\n"
-                    "Hello world\r\n";
-                    write(events[i].data.fd, pResponse, strlen(pResponse));
+                    if (strcmp(pMethod, "GET") == 0)
+                    {
+                        char response[256];
+                        sprintf(response, "HTTP/1.1 301 Moved Permanently\r\n"
+                                          "Locatoin: https://localhost:8081%s\r\n"
+                                          "\r\n", pLocation);
+                        Logger_Print(LOG_LEVEL_INFO, "[HttpRedirector] 301 Moved Permanently.\n"
+                                                     "Detail: %s", pLocation);
+                        write(pClient->Sock, response, strlen(response));
+                    }
+                    
                 }
 
-                close(events[i].data.fd);
+                close(pClient->Sock);
+                StaticMemPool_Free(&clientPool, events[i].data.ptr);
             }
         }
     }
@@ -196,6 +213,8 @@ lb_return:
     {
         close(httpSock);
     }
+
+    StaticMemPool_Release(&clientPool);
 
     return NULL;
 }

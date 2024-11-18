@@ -7,13 +7,7 @@
 
 #include <pthread.h>
 
-typedef struct HTTP_REDIRECTOR
-{
-    pthread_t Thread;
-    uint16_t Port;
-} HTTP_REDIRECTOR;
-
-bool HttpRedirector_Init(HTTP_REDIRECTOR* pHttpRedirector, uint16_t port);
-void HttpRedirector_Start(HTTP_REDIRECTOR* pHttpRedirector);
+// 실패 시, 0 반환
+pthread_t HttpRedirector_Start(const uint16_t httpPort);
 
 #endif // __HTTP_REDIRECTOR_H

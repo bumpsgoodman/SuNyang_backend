@@ -3,6 +3,8 @@
 
 #include "../PrimitiveType.h"
 
+#define IPV4_LENGTH 16
+
 typedef enum BYTE_ORDERING {
     BYTE_ORDERING_LITTLE_ENDIAN,
     BYTE_ORDERING_BIG_ENDIAN

@@ -35,19 +35,13 @@ int main(int argc, char* argv[])
 
     bool bResult = false;
     SERVER_INFO serverInfo;
-    HTTP_REDIRECTOR httpRedirector;
+    pthread_t httpRedirector;
 
     // 초기화
     {
         Logger_Print(LOG_LEVEL_INFO, "[main] Start initializing SUNYANGI server.");
 
         bResult = ParseServerInfo(&serverInfo, argv[1]);
-        if (!bResult)
-        {
-            goto lb_return;
-        }
-
-        bResult = HttpRedirector_Init(&httpRedirector, serverInfo.HttpPort);
         if (!bResult)
         {
             goto lb_return;
@@ -60,10 +54,14 @@ int main(int argc, char* argv[])
     {
         Logger_Print(LOG_LEVEL_INFO, "[main] Start SUNYANGI server.");
 
-        HttpRedirector_Start(&httpRedirector);
+        httpRedirector = HttpRedirector_Start(serverInfo.HttpPort);
+        if (httpRedirector == 0)
+        {
+            goto lb_return;
+        }
     }
 
-    pthread_join(httpRedirector.Thread, NULL);
+    pthread_join(httpRedirector, NULL);
 
     bResult = true;
 

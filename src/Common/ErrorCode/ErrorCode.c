@@ -21,6 +21,7 @@ static const char* sp_HttpRedirectorInfoDetailTable[] =
     "Failed to create epoll.",
     "Failed to watch epoll descriptor.",
     "Buffer overflow.",
+    "Failed to addr memory pool.",
 };
 
 static const char** sp_detailTables[] =
