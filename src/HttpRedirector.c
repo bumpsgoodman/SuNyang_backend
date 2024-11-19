@@ -11,7 +11,6 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <ncurses.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -56,12 +55,6 @@ lb_return:
 
 static void* redirectHttp(void* pArg)
 {
-    //initscr(); // 터미널 초기화
-    // cbreak(); // cbreak 모드 설정
-    // noecho(); // 입력 문자 표시 끄기
-    // keypad(stdscr, TRUE); // 키패드 모드 활성화
-    // nodelay(stdscr, FALSE); // 차단 모드 설정
-
     const uint16_t httpPort = *(uint16_t*)pArg;
     STATIC_MEM_POOL clientPool;
     STATIC_MEM_POOL requestBufferPool;
