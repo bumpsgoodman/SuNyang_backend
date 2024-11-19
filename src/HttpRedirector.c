@@ -10,6 +10,8 @@
 #include "Common/Network/Network.h"
 
 #include <errno.h>
+#include <fcntl.h>
+#include <ncurses.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,12 +32,16 @@ typedef struct CLIENT
 
 static void* redirectHttp(void* pArg);
 
+uint16_t g_httpPort;
+
 pthread_t HttpRedirector_Start(const uint16_t httpPort)
 {
     Logger_Print(LOG_LEVEL_INFO, "[HttpRedirector] Start HTTP redirector.");
 
+    g_httpPort = httpPort;
+
     pthread_t httpRedirector;
-    if (pthread_create(&httpRedirector, NULL, redirectHttp, (void*)&httpPort) < 0)
+    if (pthread_create(&httpRedirector, NULL, redirectHttp, (void*)&g_httpPort) != 0)
     {
         ErrorCode_SetLastError(ERROR_CODE_REDIRECTOR_FAILED_CREATE_THREAD);
         Logger_Print(LOG_LEVEL_ERROR, "[HttpRedirector] Shutdown HTTP redirector with an error.\n"
@@ -50,10 +56,18 @@ lb_return:
 
 static void* redirectHttp(void* pArg)
 {
+    //initscr(); // 터미널 초기화
+    // cbreak(); // cbreak 모드 설정
+    // noecho(); // 입력 문자 표시 끄기
+    // keypad(stdscr, TRUE); // 키패드 모드 활성화
+    // nodelay(stdscr, FALSE); // 차단 모드 설정
+
     const uint16_t httpPort = *(uint16_t*)pArg;
     STATIC_MEM_POOL clientPool;
+    STATIC_MEM_POOL requestBufferPool;
 
     StaticMemPool_Init(&clientPool, 10, 1000, sizeof(CLIENT));
+    StaticMemPool_Init(&requestBufferPool, 10, 1000, MAX_HTTP_MESSAGE_SIZE);
 
     // HTTP 소켓 생성
     const int httpSock = socket(AF_INET, SOCK_STREAM, 0);
@@ -129,8 +143,8 @@ static void* redirectHttp(void* pArg)
                 {
                     ErrorCode_SetLastError(ERROR_CODE_REDIRECTOR_FAILED_CREATE_SOCKET);
                     Logger_Print(LOG_LEVEL_ERROR, "[HttpRedirector] Failed to create http client socket.\n"
-                                                "Detail: %s\n"
-                                                "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
+                                                  "Detail: %s\n"
+                                                  "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
                     continue;
                 }
 
@@ -138,7 +152,7 @@ static void* redirectHttp(void* pArg)
 
                 // client socket epoll 등록
                 struct epoll_event event;
-                event.events = EPOLLIN | EPOLLOUT | EPOLLERR;
+                event.events = EPOLLIN | EPOLLET;
                 event.data.ptr = pClient;
                 if (epoll_ctl(httpEpoll, EPOLL_CTL_ADD, clientSock, &event) == -1)
                 {
@@ -150,30 +164,30 @@ static void* redirectHttp(void* pArg)
                     continue;
                 }
             }
-            else
+            else if (events[i].events & EPOLLIN)
             {
                 CLIENT* pClient = (CLIENT*)events[i].data.ptr;
+                char* pBuffer = (char*)StaticMemPool_Alloc(&requestBufferPool);
 
-                char buffer[MAX_HTTP_MESSAGE_SIZE];
-                ssize_t bytesRead = read(pClient->Sock, buffer, MAX_HTTP_MESSAGE_SIZE - 1);
+                ssize_t bytesRead = read(pClient->Sock, pBuffer, MAX_HTTP_MESSAGE_SIZE - 1);
                 printf("\n@@@@@@@@@@@@@@@@\n");
-                printf("%s\n", buffer);
+                printf("%s", pBuffer);
                 printf("@@@@@@@@@@@@@@@@\n");
+
+                // buffer overflow 발생은 해킹으로 간주
                 if (bytesRead >= MAX_HTTP_MESSAGE_SIZE - 1)
                 {
                     ErrorCode_SetLastError(ERROR_CODE_REDIRECTOR_BUFFER_OVERFLOW);
                     Logger_Print(LOG_LEVEL_WARNING, "[HttpRedirector] Buffer overflow.\n"
                                                     "Detail: %s", ErrorCode_GetLastErrorDetail());
-
-                    while ((bytesRead = read(pClient->Sock, buffer, MAX_HTTP_MESSAGE_SIZE - 1)) > 0);
-
+                    close(pClient->Sock);
                     continue;
                 }
 
                 if (bytesRead > 0)
                 {
-                    buffer[bytesRead] = '\0';
-                    const char* pMethod = strtok(buffer, " ");
+                    pBuffer[bytesRead] = '\0';
+                    const char* pMethod = strtok(pBuffer, " ");
                     const char* pLocation = strtok(NULL, " ");
                     const char* pVersion = strtok(NULL, " \r\n");
 
@@ -197,6 +211,7 @@ static void* redirectHttp(void* pArg)
 
                 close(pClient->Sock);
                 StaticMemPool_Free(&clientPool, events[i].data.ptr);
+                StaticMemPool_Free(&requestBufferPool, pBuffer);
             }
         }
     }
