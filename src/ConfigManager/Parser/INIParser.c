@@ -1,10 +1,9 @@
 // 작성자: bumpsgoodman
 
 #include "INIParser.h"
-#include "../Assert.h"
-#include "../SafeDelete.h"
+#include "../../Common/Assert.h"
+#include "../../Common/SafeDelete.h"
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -196,6 +195,27 @@ bool INIParser_Parse(INI_PARSER* pParser, const char* pFilename)
     fclose(pINIFile);
 
     return true;
+}
+
+void INIParser_Print(const INI_PARSER* pParser)
+{
+    ASSERT(pParser != NULL, "pParser is NULL");
+
+    INI_SECTION* pSection = pParser->pSectionsListHead;
+    while (pSection != NULL)
+    {
+        printf("[%s]\n", pSection->pName);
+
+        INI_KEY_VALUE* pKeyValue = pSection->pKeyValuesListHead;
+        while (pKeyValue != NULL)
+        {
+            printf("%s=%s\n", pKeyValue->pKey, pKeyValue->pValue);
+
+            pKeyValue = pKeyValue->pNext;
+        }
+
+        pSection = pSection->pNext;
+    }
 }
 
 bool INIParser_GetValueChar(const INI_PARSER* pParser, const char* pSectionName, const char* pKey, char* pOutValue)

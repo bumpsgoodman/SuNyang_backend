@@ -3,7 +3,7 @@
 #ifndef __INI_PARSER_H
 #define __INI_PARSER_H
 
-#include "../PrimitiveType.h"
+#include "../../Common/PrimitiveType.h"
 
 typedef struct INI_KEY_VALUE
 {
@@ -38,6 +38,7 @@ typedef struct INI_PARSER
 bool INIParser_Init(INI_PARSER* pParser);
 void INIParser_Release(INI_PARSER* pParser);
 bool INIParser_Parse(INI_PARSER* pParser, const char* pFilename);
+void INIParser_Print(const INI_PARSER* pParser);
 
 bool INIParser_GetValueChar(const INI_PARSER* pParser, const char* pSectionName, const char* pKey, char* pOutValue);
 bool INIParser_GetValueString(const INI_PARSER* pParser, const char* pSectionName, const char* pKey, char** ppOutValueMalloc);

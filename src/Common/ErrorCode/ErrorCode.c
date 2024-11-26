@@ -3,7 +3,7 @@
 
 static error_code_t s_errorCode = ERROR_CODE_SUCCESS;
 
-static const char* sp_serverInfoDetailTable[] =
+static const char* sp_ConfigManagerDetailTable[] =
 {
     "This file is not an .ini file.",
     "Failed to init ini parser.",
@@ -26,7 +26,7 @@ static const char* sp_HttpRedirectorInfoDetailTable[] =
 
 static const char** sp_detailTables[] =
 {
-    sp_serverInfoDetailTable,
+    sp_ConfigManagerDetailTable,
     sp_HttpRedirectorInfoDetailTable,
 };
 
