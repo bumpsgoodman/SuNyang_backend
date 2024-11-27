@@ -1,6 +1,6 @@
 #include "StaticMemPool.h"
-#include "../Assert.h"
-#include "../SafeDelete.h"
+#include "Common/Assert.h"
+#include "Common/SafeDelete.h"
 
 #include <stdlib.h>
 #include <string.h>

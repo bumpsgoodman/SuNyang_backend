@@ -3,7 +3,7 @@
 #ifndef __CONFIG_MANAGER_H
 #define __CONFIG_MANAGER_H
 
-#include "../Common/Interface/IConfigManager.h"
+#include "Common/Interface/IConfigManager.h"
 
 typedef struct CONFIG_MANAGER
 {

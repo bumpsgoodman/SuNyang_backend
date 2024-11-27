@@ -1,9 +1,9 @@
 // 작성자: bumpsgoodman
 
 #include "Logger.h"
-#include "../Assert.h"
-#include "../ConsoleVTSequence.h"
-#include "../PrimitiveType.h"
+#include "Common/Assert.h"
+#include "Common/ConsoleVTSequence.h"
+#include "Common/PrimitiveType.h"
 
 #include <stdio.h>
 #include <stdarg.h>

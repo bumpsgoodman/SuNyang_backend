@@ -1,5 +1,5 @@
 #include "ErrorCode.h"
-#include "../PrimitiveType.h"
+#include "Common/PrimitiveType.h"
 
 static error_code_t s_errorCode = ERROR_CODE_SUCCESS;
 

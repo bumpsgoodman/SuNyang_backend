@@ -3,7 +3,7 @@
 #ifndef __INI_PARSER_H
 #define __INI_PARSER_H
 
-#include "../../Common/PrimitiveType.h"
+#include "Common/PrimitiveType.h"
 
 typedef struct INI_KEY_VALUE
 {

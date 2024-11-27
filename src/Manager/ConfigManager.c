@@ -2,10 +2,10 @@
 
 #include "ConfigManager.h"
 #include "Parser/INIParser.h"
-#include "../Common/Assert.h"
-#include "../Common/SafeDelete.h"
-#include "../Common/ErrorCode/ErrorCode.h"
-#include "../Common/Logger/Logger.h"
+#include "Common/Assert.h"
+#include "Common/SafeDelete.h"
+#include "Generic/ErrorCode/ErrorCode.h"
+#include "Generic/Logger/Logger.h"
 
 #include <stdlib.h>
 #include <string.h>

@@ -3,23 +3,23 @@
 #ifndef __STATIC_MEM_POOL_H
 #define __STATIC_MEM_POOL_H
 
-#include "../PrimitiveType.h"
+#include "Common/PrimitiveType.h"
 
 #define HEADER_SIZE sizeof(size_t)
 
 typedef struct STATIC_MEM_POOL
 {
-    size_t          NumElementsPerBlock;
-    size_t          NumMaxBlocks;
-    size_t          ElementSize;
-    size_t          ElementSizeWithHeader;
-    size_t          NumBlocks;
-    size_t          NumElements;
-    size_t          NumMaxElements;
+    size_t NumElementsPerBlock;
+    size_t NumMaxBlocks;
+    size_t ElementSize;
+    size_t ElementSizeWithHeader;
+    size_t NumBlocks;
+    size_t NumElements;
+    size_t NumMaxElements;
 
-    char**          ppBlocks;
-    char***         pppIndexTable;
-    char***         pppIndexTablePtr;
+    char** ppBlocks;
+    char*** pppIndexTable;
+    char*** pppIndexTablePtr;
 } STATIC_MEM_POOL;
 
 bool StaticMemPool_Init(STATIC_MEM_POOL* pPool, const size_t numElementsPerBlock, const size_t numMaxBlocks, const size_t elementSize);

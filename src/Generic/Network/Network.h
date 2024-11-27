@@ -1,7 +1,7 @@
 #ifndef __NETWORK_H
 #define __NETWORK_H
 
-#include "../PrimitiveType.h"
+#include "Common/PrimitiveType.h"
 
 #define IPV4_LENGTH 16
 
