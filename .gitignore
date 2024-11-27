@@ -2,3 +2,4 @@
 config/
 public/
 output/
+*.o
