@@ -1,16 +1,65 @@
-#include "StaticMemPool.h"
 #include "Common/Assert.h"
 #include "Common/SafeDelete.h"
+#include "Generic/MemPool/StaticMemPool.h"
 
 #include <stdlib.h>
 #include <string.h>
 
-bool StaticMemPool_Init(STATIC_MEM_POOL* pPool, const size_t numElementsPerBlock, const size_t numMaxBlocks, const size_t elementSize)
+#define HEADER_SIZE sizeof(size_t)
+
+static bool Init(IStaticMemPool* pThis, const size_t numElementsPerBlock, const size_t numMaxBlocks, const size_t elementSize);
+static void Release(IStaticMemPool* pThis);
+
+static void* Alloc(IStaticMemPool* pThis);
+static void Free(IStaticMemPool* pThis, void* pMem);
+static void Clear(IStaticMemPool* pThis);
+
+static size_t GetNumElementsPerBlock(const IStaticMemPool* pThis);
+static size_t GetNumMaxBlocks(const IStaticMemPool* pThis);
+static size_t GetElementSize(const IStaticMemPool* pThis);
+static size_t GetNumElements(const IStaticMemPool* pThis);
+
+static const IStaticMemPool s_vtbl =
 {
-    ASSERT(pPool != NULL, "pPool is NULL");
+    Init,
+    Release,
+
+    Alloc,
+    Free,
+    Clear,
+
+    GetNumElementsPerBlock,
+    GetNumMaxBlocks,
+    GetElementSize,
+    GetNumElements,
+};
+
+typedef struct STATIC_MEM_POOL
+{
+    IStaticMemPool vtbl;
+
+    size_t NumElementsPerBlock;
+    size_t NumMaxBlocks;
+    size_t ElementSize;
+    size_t ElementSizeWithHeader;
+    size_t NumBlocks;
+    size_t NumElements;
+    size_t NumMaxElements;
+
+    char** ppBlocks;
+    char*** pppIndexTable;
+    char*** pppIndexTablePtr;
+} STATIC_MEM_POOL;
+
+static bool Init(IStaticMemPool* pThis, const size_t numElementsPerBlock, const size_t numMaxBlocks, const size_t elementSize)
+{
+    ASSERT(pThis != NULL, "pThis is NULL");
     ASSERT(numElementsPerBlock > 0, "numElementsPerBlock is 0");
     ASSERT(numMaxBlocks > 0, "numMaxBlocks is 0");
     ASSERT(elementSize > 0, "elementSize is 0");
+
+    STATIC_MEM_POOL* pPool = (STATIC_MEM_POOL*)pThis;
+    pPool->vtbl = s_vtbl;
 
     pPool->NumElementsPerBlock = numElementsPerBlock;
     pPool->NumMaxBlocks = numMaxBlocks;
@@ -21,21 +70,14 @@ bool StaticMemPool_Init(STATIC_MEM_POOL* pPool, const size_t numElementsPerBlock
     pPool->NumMaxElements = numElementsPerBlock * numMaxBlocks;
 
     pPool->ppBlocks = (char**)malloc(PTR_SIZE * numMaxBlocks);
-    ASSERT(pPool->ppBlocks != NULL, "Failed to malloc");
-
     memset(pPool->ppBlocks, 0, PTR_SIZE * numMaxBlocks);
 
     pPool->ppBlocks[0] = (char*)malloc(pPool->ElementSizeWithHeader * numElementsPerBlock);
-    ASSERT(pPool->ppBlocks[0] != NULL, "Failed to malloc");
 
     pPool->pppIndexTable = (char***)malloc(PTR_SIZE * numMaxBlocks);
-    ASSERT(pPool->pppIndexTable != NULL, "Failed to malloc");
-
     char** ppIndexTable = (char**)malloc(PTR_SIZE * numElementsPerBlock);
-    ASSERT(ppIndexTable != NULL, "Failed to malloc");
 
     pPool->pppIndexTablePtr = (char***)malloc(PTR_SIZE * numMaxBlocks);
-    ASSERT(pPool->pppIndexTablePtr != NULL, "Failed to malloc");
 
     // 인덱스 테이블 초기화
     for (size_t i = 0; i < numElementsPerBlock; ++i)
@@ -51,9 +93,11 @@ bool StaticMemPool_Init(STATIC_MEM_POOL* pPool, const size_t numElementsPerBlock
     return true;
 }
 
-void StaticMemPool_Release(STATIC_MEM_POOL* pPool)
+static void Release(IStaticMemPool* pThis)
 {
-    ASSERT(pPool != NULL, "pPool is NULL");
+    ASSERT(pThis!= NULL, "pThis is NULL");
+
+    STATIC_MEM_POOL* pPool = (STATIC_MEM_POOL*)pThis;
 
     for (size_t i = 0; i < pPool->NumBlocks; ++i)
     {
@@ -68,9 +112,11 @@ void StaticMemPool_Release(STATIC_MEM_POOL* pPool)
     memset(pPool, 0, sizeof(STATIC_MEM_POOL));
 }
 
-void* StaticMemPool_Alloc(STATIC_MEM_POOL* pPool)
+static void* Alloc(IStaticMemPool* pThis)
 {
-    ASSERT(pPool != NULL, "pPool is NULL");
+    ASSERT(pThis!= NULL, "pThis is NULL");
+
+    STATIC_MEM_POOL* pPool = (STATIC_MEM_POOL*)pThis;
 
     if (pPool->NumElements >= pPool->NumMaxElements)
     {
@@ -96,10 +142,7 @@ void* StaticMemPool_Alloc(STATIC_MEM_POOL* pPool)
     if (blockIndex >= pPool->NumBlocks)
     {
         char* pBlock = (char*)malloc(pPool->ElementSizeWithHeader * pPool->NumElementsPerBlock);
-        ASSERT(pBlock != NULL, "Failed to mallc");
-
         char** ppIndexTable = (char**)malloc(PTR_SIZE * pPool->NumElementsPerBlock);
-        ASSERT(ppIndexTable != NULL, "Failed to malloc");
 
         // 인덱스 테이블 초기화
         for (size_t i = 0; i < pPool->NumElementsPerBlock; ++i)
@@ -121,9 +164,11 @@ void* StaticMemPool_Alloc(STATIC_MEM_POOL* pPool)
     return pMem;
 }
 
-void StaticMemPool_Free(STATIC_MEM_POOL* pPool, void* pMem)
+static void Free(IStaticMemPool* pThis, void* pMem)
 {
-    ASSERT(pPool != NULL, "pPool is NULL");
+    ASSERT(pThis!= NULL, "pThis is NULL");
+
+    STATIC_MEM_POOL* pPool = (STATIC_MEM_POOL*)pThis;
 
     char* pHeader = (char*)pMem - HEADER_SIZE;
     const size_t blockIndex = *(size_t*)pHeader;
@@ -132,9 +177,11 @@ void StaticMemPool_Free(STATIC_MEM_POOL* pPool, void* pMem)
     --pPool->NumElements;
 }
 
-void StaticMemPool_Clear(STATIC_MEM_POOL* pPool)
+static void Clear(IStaticMemPool* pThis)
 {
-    ASSERT(pPool != NULL, "pPool is NULL");
+    ASSERT(pThis!= NULL, "pThis is NULL");
+
+    STATIC_MEM_POOL* pPool = (STATIC_MEM_POOL*)pThis;
 
     for (size_t i = 0; i < pPool->NumBlocks; ++i)
     {
@@ -153,26 +200,51 @@ void StaticMemPool_Clear(STATIC_MEM_POOL* pPool)
     pPool->NumElements = 0;
 }
 
-size_t StaticMemPool_GetNumElementsPerBlock(const STATIC_MEM_POOL* pPool)
+static size_t GetNumElementsPerBlock(const IStaticMemPool* pThis)
 {
-    ASSERT(pPool != NULL, "pPool is NULL");
+    ASSERT(pThis!= NULL, "pThis is NULL");
+
+    STATIC_MEM_POOL* pPool = (STATIC_MEM_POOL*)pThis;
     return pPool->NumElementsPerBlock;
 }
 
-size_t StaticMemPool_GetNumMaxBlocks(const STATIC_MEM_POOL* pPool)
+static size_t GetNumMaxBlocks(const IStaticMemPool* pThis)
 {
-    ASSERT(pPool != NULL, "pPool is NULL");
+    ASSERT(pThis!= NULL, "pThis is NULL");
+
+    STATIC_MEM_POOL* pPool = (STATIC_MEM_POOL*)pThis;
     return pPool->NumMaxBlocks;
 }
 
-size_t StaticMemPool_GetElementSize(const STATIC_MEM_POOL* pPool)
+static size_t GetElementSize(const IStaticMemPool* pThis)
 {
-    ASSERT(pPool != NULL, "pPool is NULL");
+    ASSERT(pThis!= NULL, "pThis is NULL");
+
+    STATIC_MEM_POOL* pPool = (STATIC_MEM_POOL*)pThis;
     return pPool->ElementSize;
 }
 
-size_t StaticMemPool_GetNumElements(const STATIC_MEM_POOL* pPool)
+static size_t GetNumElements(const IStaticMemPool* pThis)
 {
-    ASSERT(pPool != NULL, "pPool is NULL");
+    ASSERT(pThis!= NULL, "pThis is NULL");
+
+    STATIC_MEM_POOL* pPool = (STATIC_MEM_POOL*)pThis;
     return pPool->NumElements;
+}
+
+void CreateStaticMemPool(IStaticMemPool** ppOutInterface)
+{
+    ASSERT(ppOutInterface!= NULL, "ppOutInterface is NULL");
+
+    STATIC_MEM_POOL* pPool = (STATIC_MEM_POOL*)malloc(sizeof(STATIC_MEM_POOL));
+    pPool->vtbl = s_vtbl;
+
+    *ppOutInterface = (IStaticMemPool*)pPool;
+}
+
+void DestroyStaticMemPool(IStaticMemPool* pInterface)
+{
+    ASSERT(pInterface!= NULL, "pInterface is NULL");
+
+    SAFE_FREE(pInterface);
 }

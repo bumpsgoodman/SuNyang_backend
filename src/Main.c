@@ -1,15 +1,14 @@
 // 작성자: bumpsgoodman
 
 #include "Common/Assert.h"
+#include "Common/Defines.h"
 #include "Common/PrimitiveType.h"
 #include "Common/SafeDelete.h"
-#include "Common/Interface/IConfigManager.h"
 #include "Generic/Logger/Logger.h"
+#include "Generic/Manager/ConfigManager.h"
 
 #include <dlfcn.h>
 #include <stdio.h>
-
-typedef void* (*GetManagerFunc)(void);
 
 int main(int argc, char* argv[])
 {
@@ -19,21 +18,8 @@ int main(int argc, char* argv[])
         goto lb_return;
     }
 
-    void* pManagerLibHandle = dlopen("../output/dynamic_lib/Manager.so", RTLD_NOW | RTLD_GLOBAL);
-    if (pManagerLibHandle == NULL)
-    {
-        fprintf(stderr, "Unable to open lib: %s\n", dlerror());
-        return -1;
-    }
-    GetManagerFunc fpGetConfigManager = (void*)dlsym(pManagerLibHandle, "GetConfigManager");
-    if (fpGetConfigManager == NULL)
-    {
-        fprintf(stderr, "Unable to get symbol");
-        return -1;
-    }
-
     bool bResult = false;
-    IConfigManager* pConfigManager = fpGetConfigManager();
+    IConfigManager* pConfigManager = GetConfigManager();
 
     // 초기화
     {

@@ -1,18 +1,10 @@
 // 작성자: bumpsgoodman
 
-#ifndef __I_CONFIG_MANAGER_H
-#define __I_CONFIG_MANAGER_H
+#ifndef __CONFIG_MANAGER_H
+#define __CONFIG_MANAGER_H
 
-#include "../Defines.h"
-#include "../PrimitiveType.h"
-
-typedef struct SERVER_INFO
-{
-    size_t RefCount;
-
-    uint16_t HttpPort;
-    uint16_t HttpsPort;
-} SERVER_INFO;
+#include "Common/Defines.h"
+#include "Common/PrimitiveType.h"
 
 typedef INTERFACE IConfigManager IConfigManager;
 INTERFACE IConfigManager
@@ -26,4 +18,4 @@ INTERFACE IConfigManager
 
 IConfigManager* GetConfigManager(void);
 
-#endif // __I_CONFIG_MANAGER_H
+#endif // __CONFIG_MANAGER_H

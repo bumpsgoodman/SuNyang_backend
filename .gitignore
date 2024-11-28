@@ -1,5 +1,6 @@
 .vscode/
 config/
 public/
-output/
+bin/
+lib/
 *.o

@@ -5,4 +5,6 @@
 
 #define INTERFACE struct
 
+typedef void* (*GetManagerFunc)(void);
+
 #endif // __DEFINES_H

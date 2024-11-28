@@ -1,17 +1,31 @@
 // 작성자: bumpsgoodman
 
-#include "ConfigManager.h"
-#include "Parser/INIParser.h"
 #include "Common/Assert.h"
 #include "Common/SafeDelete.h"
 #include "Generic/ErrorCode/ErrorCode.h"
 #include "Generic/Logger/Logger.h"
+#include "Generic/Manager/Parser/INIParser.h"
+#include "Generic/Manager/ConfigManager.h"
 
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
-static IConfigManager s_vtbl =
+typedef struct CONFIG_MANAGER
+{
+    IConfigManager vtbl;
+
+    uint16_t HttpPort;
+    uint16_t HttpsPort;
+} CONFIG_MANAGER;
+
+static bool Init(IConfigManager* pThis, const char* pConfigFilePath);
+static void Release(IConfigManager* pThis);
+
+static uint16_t GetHttpPort(const IConfigManager* pThis);
+static uint16_t GetHttpsPort(const IConfigManager* pThis);
+
+static const IConfigManager s_vtbl =
 {
     Init,
     Release,
