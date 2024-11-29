@@ -8,6 +8,6 @@
 #include <pthread.h>
 
 // 실패 시, 0 반환
-pthread_t HttpRedirector_Start(const uint16_t httpPort);
+pthread_t HttpRedirector_Start(void);
 
 #endif // __HTTP_REDIRECTOR_H

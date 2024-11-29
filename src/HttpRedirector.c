@@ -2,12 +2,13 @@
 
 #include "HttpRedirector.h"
 #include "Common/Assert.h"
-#include "Common/ErrorCode/ErrorCode.h"
 #include "Common/PrimitiveType.h"
 #include "Common/SafeDelete.h"
-#include "Common/MemPool/StaticMemPool.h"
-#include "Common/Logger/Logger.h"
-#include "Common/Network/Network.h"
+#include "Generic/ErrorCode/ErrorCode.h"
+#include "Generic/Manager/ConfigManager.h"
+#include "Generic/MemPool/StaticMemPool.h"
+#include "Generic/Logger/Logger.h"
+#include "Generic/Network/Network.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -31,16 +32,12 @@ typedef struct CLIENT
 
 static void* redirectHttp(void* pArg);
 
-uint16_t g_httpPort;
-
-pthread_t HttpRedirector_Start(const uint16_t httpPort)
+pthread_t HttpRedirector_Start(void)
 {
     Logger_Print(LOG_LEVEL_INFO, "[HttpRedirector] Start HTTP redirector.");
 
-    g_httpPort = httpPort;
-
     pthread_t httpRedirector;
-    if (pthread_create(&httpRedirector, NULL, redirectHttp, (void*)&g_httpPort) != 0)
+    if (pthread_create(&httpRedirector, NULL, redirectHttp, NULL) != 0)
     {
         ErrorCode_SetLastError(ERROR_CODE_REDIRECTOR_FAILED_CREATE_THREAD);
         Logger_Print(LOG_LEVEL_ERROR, "[HttpRedirector] Shutdown HTTP redirector with an error.\n"
@@ -48,19 +45,23 @@ pthread_t HttpRedirector_Start(const uint16_t httpPort)
                                       "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
         return 0;
     }
-
-lb_return:
+    
     return httpRedirector;
 }
 
 static void* redirectHttp(void* pArg)
 {
-    const uint16_t httpPort = *(uint16_t*)pArg;
-    STATIC_MEM_POOL clientPool;
-    STATIC_MEM_POOL requestBufferPool;
+    IConfigManager* pConfigManager = GetConfigManager();
+    const uint16_t httpPort = pConfigManager->GetHttpPort(pConfigManager);
 
-    StaticMemPool_Init(&clientPool, 10, 1000, sizeof(CLIENT));
-    StaticMemPool_Init(&requestBufferPool, 10, 1000, MAX_HTTP_MESSAGE_SIZE);
+    IStaticMemPool* pClientPool = NULL;
+    IStaticMemPool* pRequestBufferPool = NULL;
+
+    CreateStaticMemPool(&pClientPool);
+    CreateStaticMemPool(&pRequestBufferPool);
+
+    pClientPool->Init(pClientPool, 10, 1000, sizeof(CLIENT));
+    pClientPool->Init(pRequestBufferPool, 10, 1000, MAX_HTTP_MESSAGE_SIZE);
 
     // HTTP 소켓 생성
     const int httpSock = socket(AF_INET, SOCK_STREAM, 0);
@@ -128,7 +129,7 @@ static void* redirectHttp(void* pArg)
         {
             if (events[i].data.fd == httpSock)
             {
-                CLIENT* pClient = (CLIENT*)StaticMemPool_Alloc(&clientPool);
+                CLIENT* pClient = (CLIENT*)pClientPool->Alloc(pClientPool);
 
                 socklen_t clientAddrLen = sizeof(struct sockaddr_in);
                 const int clientSock = accept(httpSock, (struct sockaddr*)&pClient->Addr, &clientAddrLen);
@@ -160,7 +161,7 @@ static void* redirectHttp(void* pArg)
             else if (events[i].events & EPOLLIN)
             {
                 CLIENT* pClient = (CLIENT*)events[i].data.ptr;
-                char* pBuffer = (char*)StaticMemPool_Alloc(&requestBufferPool);
+                char* pBuffer = (char*)pRequestBufferPool->Alloc(pRequestBufferPool);
 
                 ssize_t bytesRead = read(pClient->Sock, pBuffer, MAX_HTTP_MESSAGE_SIZE - 1);
                 printf("\n@@@@@@@@@@@@@@@@\n");
@@ -203,8 +204,8 @@ static void* redirectHttp(void* pArg)
                 }
 
                 close(pClient->Sock);
-                StaticMemPool_Free(&clientPool, events[i].data.ptr);
-                StaticMemPool_Free(&requestBufferPool, pBuffer);
+                pClientPool->Free(pClientPool, events[i].data.ptr);
+                pClientPool->Free(pRequestBufferPool, pBuffer);
             }
         }
     }
@@ -222,7 +223,11 @@ lb_return:
         close(httpSock);
     }
 
-    StaticMemPool_Release(&clientPool);
+    SAFE_RELEASE(pClientPool);
+    SAFE_RELEASE(pRequestBufferPool);
+
+    DestroyStaticMemPool(pClientPool);
+    DestroyStaticMemPool(pRequestBufferPool);
 
     return NULL;
 }
