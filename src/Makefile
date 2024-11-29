@@ -11,9 +11,9 @@ INCLUDES = -I../include
 GenericLibrary = $(LIB_DIR)/Generic.a
 GenericSources = Generic/ErrorCode/ErrorCode.c \
                  Generic/Logger/Logger.c \
-				 Generic/Manager/ConfigManager.c \
-				 Generic/Manager/Parser/INIParser.c \
-				 Generic/MemPool/StaticMemPool.c \
+                 Generic/Manager/ConfigManager.c \
+                 Generic/Manager/Parser/INIParser.c \
+                 Generic/MemPool/StaticMemPool.c \
                  Generic/Network/Network.c
 GenericObjects = $(GenericSources:.c=.o)
 
@@ -25,7 +25,7 @@ GenericObjects = $(GenericSources:.c=.o)
 
 # 바이너리 설정
 SuNyangiBinary = $(BIN_DIR)/SuNyangi
-SuNyangiSources = Main.c
+SuNyangiSources = Main.c HttpRedirector.c
 SuNyangiObjects = $(SuNyangiSources:.c=.o)
 
 # 기본 타겟

@@ -1,5 +1,6 @@
 // 작성자: bumpsgoodman
 
+#include "HttpRedirector.h"
 #include "Common/Assert.h"
 #include "Common/Defines.h"
 #include "Common/PrimitiveType.h"
@@ -20,6 +21,7 @@ int main(int argc, char* argv[])
 
     bool bResult = false;
     IConfigManager* pConfigManager = GetConfigManager();
+    pthread_t httpRedirectorThread = 0;
 
     // 초기화
     {
@@ -36,7 +38,18 @@ int main(int argc, char* argv[])
     // 실행
     {
         Logger_Print(LOG_LEVEL_INFO, "[main] Start SUNYANGI server.");
+
+        // HttpRedirector 실행
+        httpRedirectorThread = HttpRedirector_Start();
+        if (httpRedirectorThread == 0)
+        {
+            goto lb_return;
+        }
+
+        // RequestHandler 실행
     }
+
+    pthread_join(httpRedirectorThread, NULL);
 
     bResult = true;
 

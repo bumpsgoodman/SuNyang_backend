@@ -244,7 +244,5 @@ void CreateStaticMemPool(IStaticMemPool** ppOutInterface)
 
 void DestroyStaticMemPool(IStaticMemPool* pInterface)
 {
-    ASSERT(pInterface!= NULL, "pInterface is NULL");
-
     SAFE_FREE(pInterface);
 }
