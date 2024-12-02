@@ -57,6 +57,9 @@ static size_t Release(IBlog* pThis)
         }
         pBlog->pPosts->Release(pBlog->pPosts);
 
+        DestroyStaticMemPool(pBlog->pPostPool);
+        DestroyFixedArray(pBlog->pPosts);
+
         SAFE_FREE(pThis);
 
         return 0;
