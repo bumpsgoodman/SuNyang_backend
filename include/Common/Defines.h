@@ -5,6 +5,6 @@
 
 #define INTERFACE struct
 
-typedef void* (*GetManagerFunc)(void);
+typedef void (*CreateInstanceFunc)(void** ppOutInstance);
 
 #endif // __DEFINES_H

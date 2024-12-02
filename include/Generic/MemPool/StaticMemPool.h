@@ -22,7 +22,7 @@ INTERFACE IStaticMemPool
     size_t (*GetNumElements)(const IStaticMemPool* pThis);
 };
 
-void CreateStaticMemPool(IStaticMemPool** ppOutInterface);
-void DestroyStaticMemPool(IStaticMemPool* pInterface);
+void CreateStaticMemPool(IStaticMemPool** ppOutInstance);
+void DestroyStaticMemPool(IStaticMemPool* pInstance);
 
 #endif // __STATIC_MEM_POOL_H

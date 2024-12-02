@@ -1,15 +1,17 @@
 # 컴파일러와 플래그 설정
 CC = clang
-CFLAGS = -Wall -g -Wno-sometimes-uninitialized
+CFLAGS = -Wall -g -Wno-sometimes-uninitialized -DUNICODE -D_UNICODE
 
 BIN_DIR = ../bin
 LIB_DIR = ../lib
 
 INCLUDES = -I../include
 
-# 정적 라이브러리 설정
+# Generic 라이브러리 설정
 GenericLibrary = $(LIB_DIR)/Generic.a
-GenericSources = Generic/ErrorCode/ErrorCode.c \
+GenericSources = Generic/Container/FixedArray.c \
+				 Generic/Container/DynamicArray.c \
+				 Generic/ErrorCode/ErrorCode.c \
                  Generic/Logger/Logger.c \
                  Generic/Manager/ConfigManager.c \
                  Generic/Manager/Parser/INIParser.c \
@@ -17,11 +19,10 @@ GenericSources = Generic/ErrorCode/ErrorCode.c \
                  Generic/Network/Network.c
 GenericObjects = $(GenericSources:.c=.o)
 
-# 동적 라이브러리 설정
-# ManagerLibrary = $(OUTPUT_DIR)/dynamic_lib/Manager.so
-# ManagerSources = Manager/ConfigManager.c \
-# 				 Manager/Parser/INIParser.c
-# ManagerObjects = $(ManagerSources:.c=.o)
+# Blog 라이브러리 설정
+BlogLibrary = $(LIB_DIR)/Blog.so
+BlogSources = Blog/Blog.c
+BlogObjects = $(BlogSources:.c=.o)
 
 # 바이너리 설정
 SuNyangiBinary = $(BIN_DIR)/SuNyangi
@@ -29,7 +30,7 @@ SuNyangiSources = Main.c HttpRedirector.c
 SuNyangiObjects = $(SuNyangiSources:.c=.o)
 
 # 기본 타겟
-all: $(BIN_DIR) $(LIB_DIR) $(GenericLibrary) $(SuNyangiBinary)
+all: $(BIN_DIR) $(LIB_DIR) $(GenericLibrary) $(BlogLibrary) $(SuNyangiBinary)
 
 # 출력 디렉터리 생성
 $(BIN_DIR):
@@ -37,18 +38,15 @@ $(BIN_DIR):
 $(LIB_DIR):
 	mkdir -p $(LIB_DIR)
 
-# 정적 라이브러리 생성
+# Generic 라이브러리 생성
 $(GenericLibrary): $(GenericObjects)
 	ar rcs $(GenericLibrary) $(GenericObjects)
 
-# 정적 라이브러리 생성
-$(ManagerLibrary): $(ManagerObjects)
-	ar rcs $(ManagerLibrary) $(ManagerObjects)
+# Blog 라이브러리 생성
+$(BlogLibrary): $(GenericLibrary) $(BlogObjects)
+	$(CC) $(CFLAGS) $(INCLUDES) -shared -o $(BlogLibrary) -fPIC $(BlogSources) -L$(LIB_DIR) -l:Generic.a
 
-# 동적 라이브러리 생성
-#	$(CC) $(CFLAGS) $(INCLUDES) -shared -o $(ManagerLibrary) -fPIC $(ManagerSources) -L$(OUTPUT_DIR)/static_lib -l:Generic.a
-
-# 바이너리 생성
+# SuNyangi 실행 파일 생성
 $(SuNyangiBinary): $(GenericLibrary) $(SuNyangiObjects)
 	$(CC) $(CFLAGS) $(INCLUDES) $(SuNyangiObjects) -L$(LIB_DIR) -l:Generic.a -o $(SuNyangiBinary)
 
@@ -58,6 +56,6 @@ $(SuNyangiBinary): $(GenericLibrary) $(SuNyangiObjects)
 
 # 클린업 타겟
 clean:
-	rm -f $(GenericObjects) $(GenericLibrary) $(SuNyangiObjects) $(SuNyangiBinary)
+	rm -f $(GenericObjects) $(GenericLibrary) $(BlogObjects) $(BlogLibrary) $(SuNyangiObjects) $(SuNyangiBinary)
 
 .PHONY: all clean

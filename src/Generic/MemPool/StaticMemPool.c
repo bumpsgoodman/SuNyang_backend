@@ -232,17 +232,17 @@ static size_t GetNumElements(const IStaticMemPool* pThis)
     return pPool->NumElements;
 }
 
-void CreateStaticMemPool(IStaticMemPool** ppOutInterface)
+void CreateStaticMemPool(IStaticMemPool** ppOutInstance)
 {
-    ASSERT(ppOutInterface!= NULL, "ppOutInterface is NULL");
+    ASSERT(ppOutInstance!= NULL, "ppOutInstance is NULL");
 
     STATIC_MEM_POOL* pPool = (STATIC_MEM_POOL*)malloc(sizeof(STATIC_MEM_POOL));
     pPool->vtbl = s_vtbl;
 
-    *ppOutInterface = (IStaticMemPool*)pPool;
+    *ppOutInstance = (IStaticMemPool*)pPool;
 }
 
-void DestroyStaticMemPool(IStaticMemPool* pInterface)
+void DestroyStaticMemPool(IStaticMemPool* pInstance)
 {
-    SAFE_FREE(pInterface);
+    SAFE_FREE(pInstance);
 }
