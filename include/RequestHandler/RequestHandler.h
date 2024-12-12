@@ -3,7 +3,7 @@
 #ifndef __REQUEST_HANDLER_H
 #define __REQUEST_HANDLER_H
 
-#include "../Common/PrimitiveType.h"
+#include "Common/PrimitiveType.h"
 
 
 

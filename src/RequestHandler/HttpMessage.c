@@ -1,7 +1,7 @@
 // 작성자: bumpsgoodman
 
 #include "HttpMessage.h"
-#include "../Common/Assert.h"
+#include "Common/Assert.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +9,7 @@
 const char* GetHttpMethodString(const HTTP_METHOD method)
 {
     static const char* METHODS[] = { "GET", "HEAD", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH" };
+    ASSERT((uint_t)method < 9, "Invalid method");
     return METHODS[method];
 }
 
@@ -96,6 +97,7 @@ bool ParseStartLine(char* pHttpMessage, START_LINE* pOutStartLine)
         return false;
     }
 
+    // TODO: 나중에 trie로 바꾸든 최적화 해야 할 것 같음
     if (strcmp(pMethod, "GET") == 0)
     {
         pOutStartLine->Method = HTTP_METHOD_GET;
@@ -129,6 +131,10 @@ bool ParseStartLine(char* pHttpMessage, START_LINE* pOutStartLine)
         return false;
     }
     else if (strcmp(pMethod, "PATCH") == 0)
+    {
+        return false;
+    }
+    else
     {
         return false;
     }

@@ -10,7 +10,6 @@
 #include "Generic/Manager/ConfigManager.h"
 
 #include <dlfcn.h>
-#include <locale.h>
 #include <stdio.h>
 #include <wchar.h>
 
@@ -21,8 +20,6 @@ int main(int argc, char* argv[])
         Logger_Print(LOG_LEVEL_ERROR, "Unable to read the server config file.");
         goto lb_return;
     }
-
-    setlocale(LC_ALL, "en_US.UTF-8");
 
     bool bResult = false;
     IConfigManager* pConfigManager = GetConfigManager();
@@ -59,7 +56,7 @@ int main(int argc, char* argv[])
         void* pBlogHandle = NULL;
         CreateInstanceFunc fpCreateBlogInstance = NULL;
         
-        pBlogHandle = dlopen("lib/Blog.so", RTLD_NOW | RTLD_GLOBAL);
+        pBlogHandle = dlopen("../lib/Blog.so", RTLD_NOW | RTLD_GLOBAL);
         if (pBlogHandle == NULL)
         {
             Logger_Print(LOG_LEVEL_ERROR, "[Blog] Failed to open library");

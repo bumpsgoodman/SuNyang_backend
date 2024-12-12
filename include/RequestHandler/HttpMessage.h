@@ -3,7 +3,7 @@
 #ifndef __HTTP_MESSAGE_H
 #define __HTTP_MESSAGE_H
 
-#include "../Common/PrimitiveType.h"
+#include "Common/PrimitiveType.h"
 
 typedef enum HTTP_METHOD
 {
@@ -18,7 +18,8 @@ typedef enum HTTP_METHOD
     HTTP_METHOD_PATCH    // 미지원
 } HTTP_METHOD;
 
-typedef enum HTTP_STATUS {
+typedef enum HTTP_STATUS
+{
     // 2xx: 성공
     HTTP_STATUS_OK = 200,
     HTTP_STATUS_CREATED = 201,
