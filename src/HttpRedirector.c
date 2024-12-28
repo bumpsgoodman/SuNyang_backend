@@ -154,7 +154,8 @@ static void* redirectHttp(void* pArg)
                     Logger_Print(LOG_LEVEL_ERROR, "[HttpRedirector] Failed to watch epoll descriptor.\n"
                                                   "Detail: %s\n",
                                                   "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
-                    goto lb_free_session;
+                    close(clientSock);
+                    continue;
                 }
             }
             else if (events[i].events & EPOLLIN)
