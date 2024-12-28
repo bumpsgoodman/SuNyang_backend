@@ -14,6 +14,8 @@ INTERFACE IConfigManager
 
     uint16_t (*GetHttpPort)(const IConfigManager* pThis);
     uint16_t (*GetHttpsPort)(const IConfigManager* pThis);
+    const char* (*GetCertPath)(const IConfigManager* pThis);
+    const char* (*GetPrivateKeyPath)(const IConfigManager* pThis);
 };
 
 IConfigManager* GetConfigManager(void);

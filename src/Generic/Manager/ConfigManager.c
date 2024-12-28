@@ -17,6 +17,8 @@ typedef struct CONFIG_MANAGER
 
     uint16_t HttpPort;
     uint16_t HttpsPort;
+    const char* pCertPath;
+    const char* pPrivateKeyPath;
 } CONFIG_MANAGER;
 
 static bool Init(IConfigManager* pThis, const char* pConfigFilePath);
@@ -24,6 +26,8 @@ static void Release(IConfigManager* pThis);
 
 static uint16_t GetHttpPort(const IConfigManager* pThis);
 static uint16_t GetHttpsPort(const IConfigManager* pThis);
+static const char* GetCertPath(const IConfigManager* pThis);
+static const char* GetPrivateKeyPath(const IConfigManager* pThis);
 
 static const IConfigManager s_vtbl =
 {
@@ -32,6 +36,8 @@ static const IConfigManager s_vtbl =
 
     GetHttpPort,
     GetHttpsPort,
+    GetCertPath,
+    GetPrivateKeyPath,
 };
 
 static bool Init(IConfigManager* pThis, const char* pConfigFilePath)
@@ -79,6 +85,18 @@ static bool Init(IConfigManager* pThis, const char* pConfigFilePath)
         goto lb_return;
     }
 
+    if (!INIParser_GetValueString(pParser, "Server", "certPath", (char**)&pManager->pCertPath))
+    {
+        ErrorCode_SetLastError(ERROR_CODE_CONFIG_MANAGER_FAILED_PARSE_CERT_PATH);
+        goto lb_return;
+    }
+
+    if (!INIParser_GetValueString(pParser, "Server", "privateKeyPath", (char**)&pManager->pPrivateKeyPath))
+    {
+        ErrorCode_SetLastError(ERROR_CODE_CONFIG_MANAGER_FAILED_PARSE_PRIVATE_KEY_PATH);
+        goto lb_return;
+    }
+
     bResult = true;
 
     Logger_Print(LOG_LEVEL_INFO, "[ConfigManager] End reading the server config file successfully.");
@@ -101,6 +119,10 @@ static void Release(IConfigManager* pThis)
     ASSERT(pThis != NULL, "pThis is NULL");
 
     CONFIG_MANAGER* pManager = (CONFIG_MANAGER*)pThis;
+
+    SAFE_FREE(pManager->pCertPath);
+    SAFE_FREE(pManager->pPrivateKeyPath);
+
     memset(pManager, 0, sizeof(CONFIG_MANAGER));
 }
 
@@ -118,6 +140,22 @@ static uint16_t GetHttpsPort(const IConfigManager* pThis)
 
     CONFIG_MANAGER* pManager = (CONFIG_MANAGER*)pThis;
     return pManager->HttpsPort;
+}
+
+static const char* GetCertPath(const IConfigManager* pThis)
+{
+    ASSERT(pThis != NULL, "pThis is NULL");
+
+    CONFIG_MANAGER* pManager = (CONFIG_MANAGER*)pThis;
+    return pManager->pCertPath;
+}
+
+static const char* GetPrivateKeyPath(const IConfigManager* pThis)
+{
+    ASSERT(pThis != NULL, "pThis is NULL");
+
+    CONFIG_MANAGER* pManager = (CONFIG_MANAGER*)pThis;
+    return pManager->pPrivateKeyPath;
 }
 
 IConfigManager* GetConfigManager(void)

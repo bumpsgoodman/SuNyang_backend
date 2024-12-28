@@ -1,5 +1,5 @@
 # 컴파일러와 플래그 설정
-CC = clang
+CC = gcc
 CFLAGS = -Wall -g -Wno-sometimes-uninitialized -DUNICODE -D_UNICODE
 
 BIN_DIR = ../bin
@@ -26,7 +26,7 @@ BlogObjects = $(BlogSources:.c=.o)
 
 # 바이너리 설정
 SuNyangiBinary = $(BIN_DIR)/SuNyangi
-SuNyangiSources = Main.c HttpRedirector.c
+SuNyangiSources = Main.c HttpRedirector.c HttpInterpreter.c
 SuNyangiObjects = $(SuNyangiSources:.c=.o)
 
 # 기본 타겟
@@ -48,7 +48,7 @@ $(BlogLibrary): $(GenericLibrary) $(BlogObjects)
 
 # SuNyangi 실행 파일 생성
 $(SuNyangiBinary): $(GenericLibrary) $(SuNyangiObjects)
-	$(CC) $(CFLAGS) $(INCLUDES) $(SuNyangiObjects) -L$(LIB_DIR) -l:Generic.a -o $(SuNyangiBinary)
+	$(CC) $(CFLAGS) $(INCLUDES) $(SuNyangiObjects) -L$(LIB_DIR) -l:Generic.a -lssl -lcrypto -o $(SuNyangiBinary)
 
 # 오브젝트 파일 컴파일
 %.o: %.c

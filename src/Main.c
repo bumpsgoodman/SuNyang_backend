@@ -1,6 +1,7 @@
 // 작성자: bumpsgoodman
 
 #include "HttpRedirector.h"
+#include "HttpInterpreter.h"
 #include "Common/Assert.h"
 #include "Common/Defines.h"
 #include "Common/PrimitiveType.h"
@@ -24,6 +25,7 @@ int main(int argc, char* argv[])
     bool bResult = false;
     IConfigManager* pConfigManager = GetConfigManager();
     pthread_t httpRedirectorThread = 0;
+    pthread_t httpInterpreterThread = 0;
 
     // 초기화
     {
@@ -48,7 +50,12 @@ int main(int argc, char* argv[])
             goto lb_return;
         }
 
-        // RequestHandler 실행
+        // HttpInterpreter 실행
+        httpInterpreterThread = HttpInterpreter_Start();
+        if (httpInterpreterThread == 0)
+        {
+            goto lb_return;
+        }
     }
 
     // Blog 테스트
@@ -56,7 +63,7 @@ int main(int argc, char* argv[])
         void* pBlogHandle = NULL;
         CreateInstanceFunc fpCreateBlogInstance = NULL;
         
-        pBlogHandle = dlopen("../lib/Blog.so", RTLD_NOW | RTLD_GLOBAL);
+        pBlogHandle = dlopen("Blog.so", RTLD_NOW | RTLD_GLOBAL);
         if (pBlogHandle == NULL)
         {
             Logger_Print(LOG_LEVEL_ERROR, "[Blog] Failed to open library");
@@ -91,6 +98,7 @@ int main(int argc, char* argv[])
 lb_return_blog:
 
     pthread_join(httpRedirectorThread, NULL);
+    pthread_join(httpInterpreterThread, NULL);
 
     bResult = true;
 

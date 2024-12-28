@@ -154,8 +154,7 @@ static void* redirectHttp(void* pArg)
                     Logger_Print(LOG_LEVEL_ERROR, "[HttpRedirector] Failed to watch epoll descriptor.\n"
                                                   "Detail: %s\n",
                                                   "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
-                    close(clientSock);
-                    continue;
+                    goto lb_free_session;
                 }
             }
             else if (events[i].events & EPOLLIN)
@@ -164,9 +163,6 @@ static void* redirectHttp(void* pArg)
                 char* pBuffer = (char*)pRequestBufferPool->Alloc(pRequestBufferPool);
 
                 ssize_t bytesRead = read(pClient->Sock, pBuffer, MAX_HTTP_MESSAGE_SIZE - 1);
-                printf("\n@@@@@@@@@@@@@@@@\n");
-                printf("%s", pBuffer);
-                printf("@@@@@@@@@@@@@@@@\n");
 
                 // buffer overflow 발생은 해킹으로 간주
                 if (bytesRead >= MAX_HTTP_MESSAGE_SIZE - 1)
@@ -174,8 +170,7 @@ static void* redirectHttp(void* pArg)
                     ErrorCode_SetLastError(ERROR_CODE_REDIRECTOR_BUFFER_OVERFLOW);
                     Logger_Print(LOG_LEVEL_WARNING, "[HttpRedirector] Buffer overflow.\n"
                                                     "Detail: %s", ErrorCode_GetLastErrorDetail());
-                    close(pClient->Sock);
-                    continue;
+                    goto lb_free_session;
                 }
 
                 if (bytesRead > 0)
@@ -203,6 +198,7 @@ static void* redirectHttp(void* pArg)
                     
                 }
 
+            lb_free_session:
                 close(pClient->Sock);
                 pClientPool->Free(pClientPool, events[i].data.ptr);
                 pClientPool->Free(pRequestBufferPool, pBuffer);

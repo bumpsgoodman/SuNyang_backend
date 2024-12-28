@@ -3,6 +3,10 @@
 #ifndef __ASSERT_H
 #define __ASSERT_H
 
-#define ASSERT(cond, msg) { if (!(cond)) { __asm__("int $3"); }}
+#ifdef NDEBUG
+#define ASSERT(cond, msg) ((void*)(0))
+#else
+#define ASSERT(cond, msg) { if (!(cond)) { __builtin_trap(); }}
+#endif // NDEBUG
 
 #endif // __ASSERT_H
