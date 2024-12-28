@@ -84,6 +84,8 @@ bool INIParser_Parse(INI_PARSER* pParser, const char* pFilename)
                     pEndValue = p;
                     break;
                 }
+
+                break;
             }
             else if (c == '[')
             {
@@ -113,7 +115,6 @@ bool INIParser_Parse(INI_PARSER* pParser, const char* pFilename)
             else if (c == '=' || c == ':')
             {
                 pEndKey = p;
-                
             }
             else
             {
