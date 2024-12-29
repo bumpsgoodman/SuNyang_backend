@@ -128,7 +128,7 @@ void CreateInstance(void** ppOutInstance)
     ASSERT(ppOutInstance != NULL, "ppOutInstance is NULL");
 
     BLOG* pBlog = (BLOG*)malloc(sizeof(BLOG));
-    pBlog->vtbl = s_vtbl;
+    pBlog->Vtbl = s_vtbl;
     pBlog->RefCount = 1;
 
     *(IBlog**)ppOutInstance = (IBlog*)pBlog;

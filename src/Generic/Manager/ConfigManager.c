@@ -13,12 +13,12 @@
 
 typedef struct CONFIG_MANAGER
 {
-    IConfigManager vtbl;
+    IConfigManager Vtbl;
 
     uint16_t HttpPort;
     uint16_t HttpsPort;
-    const char* pCertPath;
-    const char* pPrivateKeyPath;
+    char* pCertPath;
+    char* pPrivateKeyPath;
 } CONFIG_MANAGER;
 
 static bool Init(IConfigManager* pThis, const char* pConfigFilePath);
@@ -50,7 +50,7 @@ static bool Init(IConfigManager* pThis, const char* pConfigFilePath)
     bool bResult = false;
 
     CONFIG_MANAGER* pManager = (CONFIG_MANAGER*)pThis;
-    pManager->vtbl = s_vtbl;
+    pManager->Vtbl = s_vtbl;
 
     // 확장자 검사
     const size_t filenameLength = strlen(pConfigFilePath);
@@ -164,7 +164,7 @@ IConfigManager* GetConfigManager(void)
     if (pManager == NULL)
     {
         pManager = (CONFIG_MANAGER*)malloc(sizeof(CONFIG_MANAGER));
-        pManager->vtbl = s_vtbl;
+        pManager->Vtbl = s_vtbl;
     }
 
     return (IConfigManager*)pManager;

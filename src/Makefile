@@ -26,7 +26,7 @@ BlogObjects = $(BlogSources:.c=.o)
 
 # 바이너리 설정
 SuNyangiBinary = $(BIN_DIR)/SuNyangi
-SuNyangiSources = Main.c HttpRedirector.c HttpInterpreter.c
+SuNyangiSources = Main.c HttpRedirector.c RequestHandler.c
 SuNyangiObjects = $(SuNyangiSources:.c=.o)
 
 # 기본 타겟

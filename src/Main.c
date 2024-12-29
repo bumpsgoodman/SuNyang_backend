@@ -1,7 +1,7 @@
 // 작성자: bumpsgoodman
 
 #include "HttpRedirector.h"
-#include "HttpInterpreter.h"
+#include "RequestHandler.h"
 #include "Common/Assert.h"
 #include "Common/Defines.h"
 #include "Common/PrimitiveType.h"
@@ -51,7 +51,7 @@ int main(int argc, char* argv[])
         }
 
         // HttpInterpreter 실행
-        httpInterpreterThread = HttpInterpreter_Start();
+        httpInterpreterThread = RequestHandler_Start();
         if (httpInterpreterThread == 0)
         {
             goto lb_return;

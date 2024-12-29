@@ -11,7 +11,7 @@
 
 typedef struct FIXED_ARRAY
 {
-    IFixedArray vtbl;
+    IFixedArray Vtbl;
 
     size_t  NumMaxElements;
     size_t  ElementSize;
@@ -234,7 +234,7 @@ void CreateFixedArray(IFixedArray** ppOutInstance)
     ASSERT(ppOutInstance!= NULL, "ppOutInstance is NULL");
 
     FIXED_ARRAY* pPool = (FIXED_ARRAY*)malloc(sizeof(FIXED_ARRAY));
-    pPool->vtbl = s_vtbl;
+    pPool->Vtbl = s_vtbl;
 
     *ppOutInstance = (IFixedArray*)pPool;
 }

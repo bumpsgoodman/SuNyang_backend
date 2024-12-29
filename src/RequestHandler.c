@@ -1,6 +1,6 @@
 ﻿// 작성자: bumpsgoodman
 
-#include "HttpInterpreter.h"
+#include "RequestHandler.h"
 #include "Common/Assert.h"
 #include "Common/PrimitiveType.h"
 #include "Common/SafeDelete.h"
@@ -35,14 +35,14 @@ typedef struct CLIENT
 
 static void* interpretHttp(void* pArg);
 
-pthread_t HttpInterpreter_Start(void)
+pthread_t RequestHandler_Start(void)
 {
     Logger_Print(LOG_LEVEL_INFO, "[HttpInterpreter] Start HTTP interpreter.");
 
     pthread_t httpInterPreter;
     if (pthread_create(&httpInterPreter, NULL, interpretHttp, NULL) != 0)
     {
-        ErrorCode_SetLastError(ERROR_CODE_INTERPRETER_FAILED_CREATE_THREAD);
+        ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_FAILED_CREATE_THREAD);
         Logger_Print(LOG_LEVEL_ERROR, "[HttpInterpreter] Shutdown HTTP interpreter with an error.\n"
                                       "Detail: %s\n"
                                       "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
@@ -74,7 +74,7 @@ static void* interpretHttp(void* pArg)
     const int httpsSock = socket(AF_INET, SOCK_STREAM, 0);
     if (httpsSock < 0)
     {
-        ErrorCode_SetLastError(ERROR_CODE_INTERPRETER_FAILED_CREATE_SOCKET);
+        ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_FAILED_CREATE_SOCKET);
         Logger_Print(LOG_LEVEL_ERROR, "Failed to create https socket.\n"
                                       "Detail: %s", strerror(errno));
         goto lb_return;
@@ -87,7 +87,7 @@ static void* interpretHttp(void* pArg)
     addr.sin_port = htons(httpsPort);
     if (bind(httpsSock, (struct sockaddr*)&addr, sizeof(addr)) < 0)
     {
-        ErrorCode_SetLastError(ERROR_CODE_INTERPRETER_FAILED_BIND_SOCKET);
+        ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_FAILED_BIND_SOCKET);
         Logger_Print(LOG_LEVEL_ERROR, "[HttpInterpreter] Shutdown HTTP interpreter with an error.\n"
                                       "Detail: %s\n"
                                       "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
@@ -97,7 +97,7 @@ static void* interpretHttp(void* pArg)
     // HTTPS 소켓 리스닝
     if (listen(httpsSock, 5) < 0)
     {
-        ErrorCode_SetLastError(ERROR_CODE_INTERPRETER_FAILED_LISTEN_SOCKET);
+        ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_FAILED_LISTEN_SOCKET);
         Logger_Print(LOG_LEVEL_ERROR, "[HttpInterpreter] Shutdown HTTP interpreter with an error.\n"
                                       "Detail: %s\n"
                                       "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
@@ -108,7 +108,7 @@ static void* interpretHttp(void* pArg)
     const int httpEpoll = epoll_create1(0);
     if (httpEpoll < 0)
     {
-        ErrorCode_SetLastError(ERROR_CODE_INTERPRETER_FAILED_CREATE_EPOLL);
+        ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_FAILED_CREATE_EPOLL);
         Logger_Print(LOG_LEVEL_ERROR, "[HttpInterpreter] Shutdown HTTP interpreter with an error.\n"
                                       "Detail: %s\n"
                                       "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
@@ -121,7 +121,7 @@ static void* interpretHttp(void* pArg)
     event.data.fd = httpsSock;
     if (epoll_ctl(httpEpoll, EPOLL_CTL_ADD, httpsSock, &event) == -1)
     {
-        ErrorCode_SetLastError(ERROR_CODE_INTERPRETER_FAILED_WATCH_EPOLL_DESCRIPTER);
+        ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_FAILED_WATCH_EPOLL_DESCRIPTER);
         Logger_Print(LOG_LEVEL_ERROR, "[HttpInterpreter] Failed to watch epoll descriptor.\n"
                                       "Detail: %s\n",
                                       "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
@@ -142,7 +142,7 @@ static void* interpretHttp(void* pArg)
                 const int clientSock = accept(httpsSock, (struct sockaddr*)&pClient->Addr, &clientAddrLen);
                 if (clientSock < 0)
                 {
-                    ErrorCode_SetLastError(ERROR_CODE_INTERPRETER_FAILED_CREATE_SOCKET);
+                    ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_FAILED_CREATE_SOCKET);
                     Logger_Print(LOG_LEVEL_ERROR, "[HttpInterpreter] Failed to create http client socket.\n"
                                                   "Detail: %s\n"
                                                   "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
@@ -177,7 +177,7 @@ static void* interpretHttp(void* pArg)
                 event.data.ptr = pClient;
                 if (epoll_ctl(httpEpoll, EPOLL_CTL_ADD, clientSock, &event) == -1)
                 {
-                    ErrorCode_SetLastError(ERROR_CODE_INTERPRETER_FAILED_WATCH_EPOLL_DESCRIPTER);
+                    ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_FAILED_WATCH_EPOLL_DESCRIPTER);
                     Logger_Print(LOG_LEVEL_ERROR, "[HttpInterpreter] Failed to watch epoll descriptor.\n"
                                                   "Detail: %s\n",
                                                   "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
@@ -195,7 +195,7 @@ static void* interpretHttp(void* pArg)
                 // buffer overflow 발생은 해킹으로 간주
                 if (bytesRead >= MAX_HTTP_MESSAGE_SIZE - 1)
                 {
-                    ErrorCode_SetLastError(ERROR_CODE_INTERPRETER_BUFFER_OVERFLOW);
+                    ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_BUFFER_OVERFLOW);
                     Logger_Print(LOG_LEVEL_WARNING, "[HttpInterpreter] Buffer overflow.\n"
                                                     "Detail: %s", ErrorCode_GetLastErrorDetail());
                     goto lb_free_session;
@@ -215,6 +215,8 @@ static void* interpretHttp(void* pArg)
                 const struct sockaddr_in* pAddr = &pClient->Addr;
                 Network_Ipv4ToString(pAddr->sin_addr.s_addr, BYTE_ORDERING_LITTLE_ENDIAN, ipv4, BYTE_ORDERING_BIG_ENDIAN);
                 Logger_Print(LOG_LEVEL_INFO, "[HttpInterpreter] Request - %s %s %s, %s:%d", pMethod, pLocation, pVersion, ipv4, pAddr->sin_port);
+
+                // TODO: 요청 메시지 분석하기
 
                 if (strcmp(pMethod, "GET") == 0)
                 {

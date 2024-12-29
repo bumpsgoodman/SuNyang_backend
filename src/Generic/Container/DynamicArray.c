@@ -11,7 +11,7 @@
 
 typedef struct DYNAMIC_ARRAY
 {
-    IDynamicArray vtbl;
+    IDynamicArray Vtbl;
 
     size_t  NumMaxElements;
     size_t  ElementSize;
@@ -247,7 +247,7 @@ void CreateDynamicArray(IDynamicArray** ppOutInstance)
     ASSERT(ppOutInstance!= NULL, "ppOutInstance is NULL");
 
     DYNAMIC_ARRAY* pPool = (DYNAMIC_ARRAY*)malloc(sizeof(DYNAMIC_ARRAY));
-    pPool->vtbl = s_vtbl;
+    pPool->Vtbl = s_vtbl;
 
     *ppOutInstance = (IDynamicArray*)pPool;
 }

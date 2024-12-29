@@ -1,9 +1,7 @@
-// 작성자: bumpsgoodman
+﻿// 작성자: bumpsgoodman
 
-#ifndef __HTTP_MESSAGE_H
-#define __HTTP_MESSAGE_H
-
-#include "Common/PrimitiveType.h"
+#ifndef __HTTP_TYPEDEF_H
+#define __HTTP_TYPEDEF_H
 
 typedef enum HTTP_METHOD
 {
@@ -12,10 +10,9 @@ typedef enum HTTP_METHOD
     HTTP_METHOD_POST,
     HTTP_METHOD_PUT,
     HTTP_METHOD_DELETE,
-    HTTP_METHOD_CONNECT, // 미지원
     HTTP_METHOD_OPTIONS,
-    HTTP_METHOD_TRACE,   // 미지원
-    HTTP_METHOD_PATCH    // 미지원
+
+    HTTP_METHOD_NOT_SUPPORTED,  // CONNECT, TRACE, PATCH
 } HTTP_METHOD;
 
 typedef enum HTTP_STATUS
@@ -94,22 +91,17 @@ typedef struct HTTP_VERSION
     int Minor;
 } HTTP_VERSION;
 
-typedef struct START_LINE
+typedef struct REQUEST
 {
     HTTP_METHOD Method;
-    char* pRequestTarget;
     HTTP_VERSION Version;
-} START_LINE;
+    char* pPath;
+    void* pBody;
+} REQUEST;
 
-typedef struct STATUS_LINE
+typedef struct RESPONSE
 {
-    HTTP_VERSION Version;
-    HTTP_STATUS Status;
-} STATUS_LINE;
 
-const char* GetHttpMethodString(const HTTP_METHOD method);
-const char* GetHttpStatusString(const HTTP_STATUS status);
+} RESPONSE;
 
-bool ParseStartLine(char* pHttpMessage, START_LINE* pOutStartLine);
-
-#endif // __HTTP_MESSAGE_H
+#endif // __HTTP_TYPEDEF_H

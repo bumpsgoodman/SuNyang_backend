@@ -36,7 +36,7 @@ static const IStaticMemPool s_vtbl =
 
 typedef struct STATIC_MEM_POOL
 {
-    IStaticMemPool vtbl;
+    IStaticMemPool Vtbl;
 
     size_t NumElementsPerBlock;
     size_t NumMaxBlocks;
@@ -59,7 +59,7 @@ static bool Init(IStaticMemPool* pThis, const size_t numElementsPerBlock, const 
     ASSERT(elementSize > 0, "elementSize is 0");
 
     STATIC_MEM_POOL* pPool = (STATIC_MEM_POOL*)pThis;
-    pPool->vtbl = s_vtbl;
+    pPool->Vtbl = s_vtbl;
 
     pPool->NumElementsPerBlock = numElementsPerBlock;
     pPool->NumMaxBlocks = numMaxBlocks;
@@ -237,7 +237,7 @@ void CreateStaticMemPool(IStaticMemPool** ppOutInstance)
     ASSERT(ppOutInstance!= NULL, "ppOutInstance is NULL");
 
     STATIC_MEM_POOL* pPool = (STATIC_MEM_POOL*)malloc(sizeof(STATIC_MEM_POOL));
-    pPool->vtbl = s_vtbl;
+    pPool->Vtbl = s_vtbl;
 
     *ppOutInstance = (IStaticMemPool*)pPool;
 }

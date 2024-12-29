@@ -9,7 +9,7 @@
 
 typedef struct BLOG
 {
-    IBlog vtbl;
+    IBlog Vtbl;
     size_t RefCount;
 
     IStaticMemPool* pPostPool;

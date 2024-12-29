@@ -1,6 +1,6 @@
 // 작성자: bumpsgoodman
 
-#include "HttpMessage.h"
+#include "Internal/HttpMessage.h"
 #include "Common/Assert.h"
 
 #include <stdlib.h>
