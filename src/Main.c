@@ -50,7 +50,7 @@ int main(int argc, char* argv[])
             goto lb_return;
         }
 
-        // HttpInterpreter 실행
+        // RequestHandler 실행
         httpInterpreterThread = RequestHandler_Start();
         if (httpInterpreterThread == 0)
         {

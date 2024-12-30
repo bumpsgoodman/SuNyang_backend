@@ -2,8 +2,9 @@
 
 #include "RequestHandler.h"
 #include "Common/Assert.h"
-#include "Common/PrimitiveType.h"
 #include "Common/SafeDelete.h"
+#include "Common/Util/HashFunctions.h"
+#include "Generic/Container/FixedArray.h"
 #include "Generic/ErrorCode/ErrorCode.h"
 #include "Generic/Manager/ConfigManager.h"
 #include "Generic/MemPool/StaticMemPool.h"
@@ -25,6 +26,7 @@
 
 #define MAX_HTTP_MESSAGE_SIZE 8192
 #define MAX_EPOLL_EVENTS 128
+#define MAX_CHILDREN 4
 
 typedef struct CLIENT
 {
@@ -33,17 +35,27 @@ typedef struct CLIENT
     SSL* pSsl;
 } CLIENT;
 
-static void* interpretHttp(void* pArg);
+typedef struct PATH_NODE
+{
+    uint32_t Id;
+    bool bHasParam;
+    IFixedArray Children;
+} PATH_NODE;
+
+PATH_NODE* g_PathRoot;
+
+static void* handleRequest(void* pArg);
+static bool interpretRequest(const char* pRequestMessage, const size_t requestMessageLength, REQUEST* pOutRequest);
 
 pthread_t RequestHandler_Start(void)
 {
-    Logger_Print(LOG_LEVEL_INFO, "[HttpInterpreter] Start HTTP interpreter.");
+    Logger_Print(LOG_LEVEL_INFO, "[RequestHandler] Start request handler.");
 
     pthread_t httpInterPreter;
-    if (pthread_create(&httpInterPreter, NULL, interpretHttp, NULL) != 0)
+    if (pthread_create(&httpInterPreter, NULL, handleRequest, NULL) != 0)
     {
         ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_FAILED_CREATE_THREAD);
-        Logger_Print(LOG_LEVEL_ERROR, "[HttpInterpreter] Shutdown HTTP interpreter with an error.\n"
+        Logger_Print(LOG_LEVEL_ERROR, "[RequestHandler] Shutdown request handler with an error.\n"
                                       "Detail: %s\n"
                                       "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
         return 0;
@@ -52,7 +64,7 @@ pthread_t RequestHandler_Start(void)
     return httpInterPreter;
 }
 
-static void* interpretHttp(void* pArg)
+static void* handleRequest(void* pArg)
 {
     IConfigManager* pConfigManager = GetConfigManager();
     const uint16_t httpsPort = pConfigManager->GetHttpsPort(pConfigManager);
@@ -88,7 +100,7 @@ static void* interpretHttp(void* pArg)
     if (bind(httpsSock, (struct sockaddr*)&addr, sizeof(addr)) < 0)
     {
         ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_FAILED_BIND_SOCKET);
-        Logger_Print(LOG_LEVEL_ERROR, "[HttpInterpreter] Shutdown HTTP interpreter with an error.\n"
+        Logger_Print(LOG_LEVEL_ERROR, "[RequestHandler] Shutdown request handler with an error.\n"
                                       "Detail: %s\n"
                                       "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
         goto lb_return;
@@ -98,7 +110,7 @@ static void* interpretHttp(void* pArg)
     if (listen(httpsSock, 5) < 0)
     {
         ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_FAILED_LISTEN_SOCKET);
-        Logger_Print(LOG_LEVEL_ERROR, "[HttpInterpreter] Shutdown HTTP interpreter with an error.\n"
+        Logger_Print(LOG_LEVEL_ERROR, "[RequestHandler] Shutdown request handler with an error.\n"
                                       "Detail: %s\n"
                                       "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
         goto lb_return;
@@ -109,7 +121,7 @@ static void* interpretHttp(void* pArg)
     if (httpEpoll < 0)
     {
         ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_FAILED_CREATE_EPOLL);
-        Logger_Print(LOG_LEVEL_ERROR, "[HttpInterpreter] Shutdown HTTP interpreter with an error.\n"
+        Logger_Print(LOG_LEVEL_ERROR, "[RequestHandler] Shutdown request handler with an error.\n"
                                       "Detail: %s\n"
                                       "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
         goto lb_return;
@@ -122,7 +134,7 @@ static void* interpretHttp(void* pArg)
     if (epoll_ctl(httpEpoll, EPOLL_CTL_ADD, httpsSock, &event) == -1)
     {
         ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_FAILED_WATCH_EPOLL_DESCRIPTER);
-        Logger_Print(LOG_LEVEL_ERROR, "[HttpInterpreter] Failed to watch epoll descriptor.\n"
+        Logger_Print(LOG_LEVEL_ERROR, "[RequestHandler] Failed to watch epoll descriptor.\n"
                                       "Detail: %s\n",
                                       "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
         goto lb_return;
@@ -143,7 +155,7 @@ static void* interpretHttp(void* pArg)
                 if (clientSock < 0)
                 {
                     ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_FAILED_CREATE_SOCKET);
-                    Logger_Print(LOG_LEVEL_ERROR, "[HttpInterpreter] Failed to create http client socket.\n"
+                    Logger_Print(LOG_LEVEL_ERROR, "[RequestHandler] Failed to create http client socket.\n"
                                                   "Detail: %s\n"
                                                   "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
                     continue;
@@ -178,7 +190,7 @@ static void* interpretHttp(void* pArg)
                 if (epoll_ctl(httpEpoll, EPOLL_CTL_ADD, clientSock, &event) == -1)
                 {
                     ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_FAILED_WATCH_EPOLL_DESCRIPTER);
-                    Logger_Print(LOG_LEVEL_ERROR, "[HttpInterpreter] Failed to watch epoll descriptor.\n"
+                    Logger_Print(LOG_LEVEL_ERROR, "[RequestHandler] Failed to watch epoll descriptor.\n"
                                                   "Detail: %s\n",
                                                   "%s", ErrorCode_GetLastErrorDetail(), strerror(errno));
                     close(clientSock);
@@ -196,7 +208,7 @@ static void* interpretHttp(void* pArg)
                 if (bytesRead >= MAX_HTTP_MESSAGE_SIZE - 1)
                 {
                     ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_BUFFER_OVERFLOW);
-                    Logger_Print(LOG_LEVEL_WARNING, "[HttpInterpreter] Buffer overflow.\n"
+                    Logger_Print(LOG_LEVEL_WARNING, "[RequestHandler] Buffer overflow.\n"
                                                     "Detail: %s", ErrorCode_GetLastErrorDetail());
                     goto lb_free_session;
                 }
@@ -214,9 +226,15 @@ static void* interpretHttp(void* pArg)
                 char ipv4[IPV4_LENGTH];
                 const struct sockaddr_in* pAddr = &pClient->Addr;
                 Network_Ipv4ToString(pAddr->sin_addr.s_addr, BYTE_ORDERING_LITTLE_ENDIAN, ipv4, BYTE_ORDERING_BIG_ENDIAN);
-                Logger_Print(LOG_LEVEL_INFO, "[HttpInterpreter] Request - %s %s %s, %s:%d", pMethod, pLocation, pVersion, ipv4, pAddr->sin_port);
+                Logger_Print(LOG_LEVEL_INFO, "[RequestHandler] Request - %s %s %s, %s:%d", pMethod, pLocation, pVersion, ipv4, pAddr->sin_port);
 
-                // TODO: 요청 메시지 분석하기
+                REQUEST request;
+                if (!interpretRequest(pBuffer, bytesRead, &request))
+                {
+                    goto lb_free_session;
+                }
+
+                // TODO: 요청 처리
 
                 if (strcmp(pMethod, "GET") == 0)
                 {
@@ -224,7 +242,7 @@ static void* interpretHttp(void* pArg)
                     sprintf(response, "HTTP/1.1 301 Moved Permanently\r\n"
                         "Locatoin: https://localhost:8081%s\r\n"
                         "\r\n", pLocation);
-                    Logger_Print(LOG_LEVEL_INFO, "[HttpInterpreter] 301 Moved Permanently.\n"
+                    Logger_Print(LOG_LEVEL_INFO, "[RequestHandler] 301 Moved Permanently.\n"
                         "Detail: %s", pLocation);
                     SSL_write(pClient->pSsl, response, strlen(response));
                 }
@@ -239,7 +257,7 @@ static void* interpretHttp(void* pArg)
         }
     }
 
-    Logger_Print(LOG_LEVEL_INFO, "[HttpInterpreter] Shutdown HTTP interpreter successfully.");
+    Logger_Print(LOG_LEVEL_INFO, "[RequestHandler] Shutdown request handler successfully.");
 
 lb_return:
     if (httpEpoll >= 0)
@@ -264,4 +282,81 @@ lb_return:
     DestroyStaticMemPool(pRequestBufferPool);
 
     return NULL;
+}
+
+bool RequestHandler_RegisterPath(const HTTP_METHOD method, char* pPath, const size_t pathLength)
+{
+    ASSERT(method < HTTP_METHOD_NOT_SUPPORTED, "Invalid method");
+    ASSERT(pPath != NULL, "pPath is NULL");
+    ASSERT(pathLength > 0, "pathLength is 0");
+
+    static const char* DELIM = "/";
+
+    char* pSubPath = strtok(pPath, DELIM);
+    size_t subPathLength = strlen(pSubPath);
+    uint32_t subPathHash = Hash32(pSubPath, subPathLength);
+}
+
+static bool interpretRequest(const char* pRequestMessage, const size_t requestMessageLength, REQUEST* pOutRequest)
+{
+    ASSERT(pRequestMessage != NULL, "pRequestMessage is NULL");
+    ASSERT(requestMessageLength > 0, "Invalid requestMessageLength");
+    ASSERT(pOutRequest != NULL, "pOutRequest is NULL");
+
+    static const char* DELIM = " \r\n";
+
+    bool bResult = false;
+
+    // method 파싱
+    {
+        char* pMethod = strtok(pRequestMessage, DELIM);
+        if (pMethod == NULL)
+        {
+            return false;
+        }
+
+        static const uint32_t GET_METHOD_HASH32 = 0x548c;
+        static const uint32_t POST_METHOD_HASH32 = 0x54534f50;
+        static const uint32_t HEAD_METHOD_HASH32 = 0x44414548;
+        static const uint32_t PUT_METHOD_HASH32 = 0x54a5;
+        static const uint32_t DELETE_METHOD_HASH32 = 0x45548a90;
+        static const uint32_t CONNECT_METHOD_HASH32 = 0x544393e0;
+        static const uint32_t OPTIONS_METHOD_HASH32 = 0x534ea3e8;
+        static const uint32_t TRACE_METHOD_HASH32 = 0x454341a6;
+        static const uint32_t PATCH_METHOD_HASH32 = 0x48435491;
+
+        const size_t methodLength = strlen(pMethod);
+        const uint32_t methodHash32 = Hash32(pMethod, methodLength);
+        switch (methodHash32)
+        {
+        case GET_METHOD_HASH32:
+            pOutRequest->Method = HTTP_METHOD_GET;
+            break;
+        case POST_METHOD_HASH32:
+            pOutRequest->Method = HTTP_METHOD_POST;
+            break;
+        case HEAD_METHOD_HASH32:
+            pOutRequest->Method = HTTP_METHOD_HEAD;
+            break;
+        case PUT_METHOD_HASH32:
+            pOutRequest->Method = HTTP_METHOD_PUT;
+            break;
+        case DELETE_METHOD_HASH32:
+            pOutRequest->Method = HTTP_METHOD_DELETE;
+            break;
+        case OPTIONS_METHOD_HASH32:
+            pOutRequest->Method = HTTP_METHOD_OPTIONS;
+        case CONNECT_METHOD_HASH32: // fall-through
+        case TRACE_METHOD_HASH32:   // fall-through
+        case PATCH_METHOD_HASH32:   // fall-through
+        default:
+            ErrorCode_SetLastError(ERROR_CODE_INTERPRETER_NOT_SUPPORTED_METHOD);
+            return HTTP_METHOD_NOT_SUPPORTED;
+        }
+    }
+
+    bResult = true;
+
+lb_return:
+    return bResult;
 }

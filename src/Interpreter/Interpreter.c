@@ -19,7 +19,6 @@ static const IInterpreter s_vtbl =
 };
 
 static HTTP_METHOD getMethod(const char* pMethod);
-static bool isValidPath(const char* pPath);
 
 static size_t AddRefCount(IInterpreter* pThis)
 {
@@ -89,13 +88,23 @@ static bool InterpretRequest(IInterpreter* pThis, const char* pRequestMessage, c
     }
 
     // path 파싱
-    char* pRequestTarget = strtok(NULL, DELIM);
-    if (pRequestTarget == NULL)
+    char* pRequestPath = strtok(NULL, DELIM);
+    if (pRequestPath == NULL)
     {
-        return false;
+        goto lb_return;
     }
 
-    pOutStartLine->pRequestTarget = pRequestTarget;
+    pOutRequest->pPath = pRequestPath;
+
+    // version 파싱
+    char* pHttpVersion = strtok(NULL, DELIM);
+    if (pHttpVersion == NULL)
+    {
+        goto lb_return;
+    }
+
+    pOutRequest->Version.Major = atoi(pHttpVersion + 5);
+    pOutRequest->Version.Minor = atoi(pHttpVersion + 7);
 
     bResult = true;
 
