@@ -28,6 +28,16 @@
 #define MAX_EPOLL_EVENTS 128
 #define MAX_CHILDREN 4
 
+#define GET_METHOD_HASH32 0x548c
+#define POST_METHOD_HASH32 0x54534f50
+#define HEAD_METHOD_HASH32 0x44414548
+#define PUT_METHOD_HASH32 0x54a5
+#define DELETE_METHOD_HASH32 0x45548a90
+#define CONNECT_METHOD_HASH32 0x544393e0
+#define OPTIONS_METHOD_HASH32 0x534ea3e8
+#define TRACE_METHOD_HASH32 0x454341a6
+#define PATCH_METHOD_HASH32 0x48435491
+
 typedef struct CLIENT
 {
     int Sock;
@@ -39,13 +49,15 @@ typedef struct PATH_NODE
 {
     uint32_t Id;
     bool bHasParam;
-    IFixedArray Children;
+    IFixedArray* Children;
 } PATH_NODE;
 
 PATH_NODE* g_PathRoot;
 
 static void* handleRequest(void* pArg);
-static bool interpretRequest(const char* pRequestMessage, const size_t requestMessageLength, REQUEST* pOutRequest);
+static bool interpretRequest(char* pRequestMessage, const size_t requestMessageLength, REQUEST* pOutRequest);
+
+static bool insertPathNode(PATH_NODE* pRoot, PATH_NODE* pPathNode);
 
 pthread_t RequestHandler_Start(void)
 {
@@ -284,20 +296,54 @@ lb_return:
     return NULL;
 }
 
-bool RequestHandler_RegisterPath(const HTTP_METHOD method, char* pPath, const size_t pathLength)
+bool RequestHandler_RegisterPath(const HTTP_METHOD method, const char* pPath, const size_t pathLength)
 {
     ASSERT(method < HTTP_METHOD_NOT_SUPPORTED, "Invalid method");
     ASSERT(pPath != NULL, "pPath is NULL");
     ASSERT(pathLength > 0, "pathLength is 0");
 
-    static const char* DELIM = "/";
+    if (*pPath != '/')
+    {
+        return false;
+    }
 
-    char* pSubPath = strtok(pPath, DELIM);
-    size_t subPathLength = strlen(pSubPath);
-    uint32_t subPathHash = Hash32(pSubPath, subPathLength);
+    const char* pStart = pPath + 1;
+    const char* pEnd = pStart;
+    while (*pEnd != '\0')
+    {
+        if (*pEnd == '/')
+        {
+            const size_t len = pEnd - pStart + 1;
+            const uint32_t hash32 = SuNyangiHash32(pStart, len);
+
+            PATH_NODE* pNode = (PATH_NODE*)malloc(sizeof(PATH_NODE));
+            ASSERT(pNode != NULL, "Failed to malloc");
+
+            pNode->Id = hash32;
+            pNode->bHasParam = false;
+            CreateFixedArray(&pNode->Children);
+            pNode->Children->Init(pNode->Children, MAX_CHILDREN, sizeof(PATH_NODE));
+
+            if (*(pEnd + 1) == '*')
+            {
+                pNode->bHasParam = true;
+
+                pEnd += 3;
+                pStart = pEnd;
+            }
+
+            // TODO: Insert Node
+
+            continue;
+        }
+
+        ++pEnd;
+    }
+
+    return true;
 }
 
-static bool interpretRequest(const char* pRequestMessage, const size_t requestMessageLength, REQUEST* pOutRequest)
+static bool interpretRequest(char* pRequestMessage, const size_t requestMessageLength, REQUEST* pOutRequest)
 {
     ASSERT(pRequestMessage != NULL, "pRequestMessage is NULL");
     ASSERT(requestMessageLength > 0, "Invalid requestMessageLength");
@@ -312,21 +358,12 @@ static bool interpretRequest(const char* pRequestMessage, const size_t requestMe
         char* pMethod = strtok(pRequestMessage, DELIM);
         if (pMethod == NULL)
         {
-            return false;
+            ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_FAILED_PARSE_METHOD);
+            goto lb_return;
         }
 
-        static const uint32_t GET_METHOD_HASH32 = 0x548c;
-        static const uint32_t POST_METHOD_HASH32 = 0x54534f50;
-        static const uint32_t HEAD_METHOD_HASH32 = 0x44414548;
-        static const uint32_t PUT_METHOD_HASH32 = 0x54a5;
-        static const uint32_t DELETE_METHOD_HASH32 = 0x45548a90;
-        static const uint32_t CONNECT_METHOD_HASH32 = 0x544393e0;
-        static const uint32_t OPTIONS_METHOD_HASH32 = 0x534ea3e8;
-        static const uint32_t TRACE_METHOD_HASH32 = 0x454341a6;
-        static const uint32_t PATCH_METHOD_HASH32 = 0x48435491;
-
         const size_t methodLength = strlen(pMethod);
-        const uint32_t methodHash32 = Hash32(pMethod, methodLength);
+        const uint32_t methodHash32 = SuNyangiHash32(pMethod, methodLength);
         switch (methodHash32)
         {
         case GET_METHOD_HASH32:
@@ -350,9 +387,32 @@ static bool interpretRequest(const char* pRequestMessage, const size_t requestMe
         case TRACE_METHOD_HASH32:   // fall-through
         case PATCH_METHOD_HASH32:   // fall-through
         default:
-            ErrorCode_SetLastError(ERROR_CODE_INTERPRETER_NOT_SUPPORTED_METHOD);
-            return HTTP_METHOD_NOT_SUPPORTED;
+            ErrorCode_SetLastError(ERROR_CODE_REQUEST_HANDLER_NOT_SUPPORTED_METHOD);
+            goto lb_return;
         }
+    }
+
+    // path 파싱
+    {
+        char* pRequestPath = strtok(NULL, DELIM);
+        if (pRequestPath == NULL)
+        {
+            goto lb_return;
+        }
+
+        pOutRequest->pPath = pRequestPath;
+    }
+
+    // version 파싱
+    {
+        char* pHttpVersion = strtok(NULL, DELIM);
+        if (pHttpVersion == NULL)
+        {
+            goto lb_return;
+        }
+
+        pOutRequest->Version.Major = atoi(pHttpVersion + 5);
+        pOutRequest->Version.Minor = atoi(pHttpVersion + 7);
     }
 
     bResult = true;

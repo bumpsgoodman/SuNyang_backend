@@ -2,7 +2,7 @@
 
 #include "Common/PrimitiveType.h"
 
-inline uint32_t Hash32(const char* pBytes, unsigned int length)
+static inline uint32_t SuNyangiHash32(const char* pBytes, unsigned int length)
 {
     uint32_t hash = 0;
 

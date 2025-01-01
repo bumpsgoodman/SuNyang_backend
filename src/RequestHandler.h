@@ -11,9 +11,8 @@
 // 실패 시, 0 반환
 pthread_t RequestHandler_Start(void);
 
-// 경로 예시
 // '*'은 매개변수
-// 1. /menu/*/post/*
-bool RequestHandler_RegisterPath(const HTTP_METHOD method, char* pPath, const size_t pathLength);
+// 예) "/menu/*/post/*"
+bool RequestHandler_RegisterPath(const HTTP_METHOD method, const char* pPath, const size_t pathLength);
 
 #endif // __REQUEST_HANDLER_H
